@@ -140,7 +140,7 @@ const Upload = () => {
                               autoPlay
                               loop
                               muted
-                              className="absolute rounded-xl object-cover z-10 p-[13px] w-full h-full"
+                              className="absolute rounded-3xl object-cover z-10 p-[13px] w-full h-full"
                               src={fileDisplay}
                           />
 
