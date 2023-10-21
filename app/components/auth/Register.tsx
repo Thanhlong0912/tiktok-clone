@@ -2,8 +2,13 @@ import { ShowErrorObject } from '@/app/types';
 import React, { useState } from 'react'
 import TextInput from '../TextInput';
 import { BiLoaderCircle } from 'react-icons/bi';
+import { useUser } from '@/app/context/user';
+import { useRouter } from 'next/navigation';
 
 const Register = () => {
+    const contextUser = useUser()
+    const router = useRouter()
+
   const [loading, setLoading] = useState<boolean>(false);
   const [name, setName] = useState<string | ''>('');
   const [email, setEmail] = useState<string | ''>('');
@@ -47,8 +52,22 @@ const Register = () => {
   }
 
 
-  const register = () => {
-    console.log('register');
+  const register = async () => {
+    let isError = validate()
+    if (isError) return
+    if (!contextUser) return
+
+    try {
+        setLoading(true)
+        await contextUser.register(name, email, password)
+        setLoading(false)
+        // setIsLoginOpen(false)
+        router.refresh()
+    } catch (error) {
+        console.log(error)
+        setLoading(false)
+        alert(error)
+    }
   }
 
   return (
