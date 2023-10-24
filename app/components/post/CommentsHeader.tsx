@@ -1,6 +1,6 @@
 import { CommentsHeaderCompTypes } from '@/app/types'
 import Link from 'next/link'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { BiLoaderCircle } from "react-icons/bi"
 import { AiFillHeart } from "react-icons/ai"
 import { BsChatDots, BsTrash3 } from "react-icons/bs"
@@ -8,21 +8,101 @@ import { ImMusic } from "react-icons/im"
 import { useRouter } from 'next/navigation'
 import moment from 'moment'
 import ClientOnly from '../ClientOnly'
+import { useLikeStore } from '@/app/stores/like'
+import { useCommentStore } from '@/app/stores/comment'
+import { useGeneralStore } from '@/app/stores/general'
+import { useUser } from '@/app/context/user'
+import useIsLiked from '@/app/hooks/useIsLiked'
+import useCreateLike from '@/app/hooks/useCreateLike'
+import useDeleteLike from '@/app/hooks/useDeleteLike'
+import useDeletePostById from '@/app/hooks/useDeletePostById'
+import useCreateBucketUrl from '@/app/hooks/useCreateBucketUrl'
 
 const CommentsHeader = ({ post, params }: CommentsHeaderCompTypes) => {
 
-  const router = useRouter();
-  const [hasClickedLike, setHasClickedLike] = useState<boolean>(false)
-  const [isDeleteing, setIsDeleteing] = useState<boolean>(false)
-  const [userLiked, setUserLiked] = useState<boolean>(false)
+    let { setLikesByPost, likesByPost } = useLikeStore()
+    let { commentsByPost, setCommentsByPost } = useCommentStore()
+    let { setIsLoginOpen } = useGeneralStore()
 
-  const deletePost = () => {
-    console.log('deletePost');
-  }
+    const contextUser = useUser()
+    const router = useRouter();
+    const [hasClickedLike, setHasClickedLike] = useState<boolean>(false)
+    const [isDeleteing, setIsDeleteing] = useState<boolean>(false)
+    const [userLiked, setUserLiked] = useState<boolean>(false)
 
-  const likeOrUnlike = () => {
-    console.log('objectLikeOrUnlike');
-  }
+    useEffect(() => {
+        setCommentsByPost(params?.postId)
+        setLikesByPost(params?.postId)
+    }, [post])
+
+    useEffect(() => { hasUserLikedPost() }, [likesByPost])
+
+    const hasUserLikedPost = () => {
+        if (likesByPost.length < 1 || !contextUser?.user?.id) {
+            setUserLiked(false)
+            return
+        }
+        let res = useIsLiked(contextUser.user.id, params.postId, likesByPost)
+        setUserLiked(res ? true : false)
+    }
+
+    const like = async () => {
+        try {
+            setHasClickedLike(true)
+            await useCreateLike(contextUser?.user?.id || '', params.postId)
+            setLikesByPost(params.postId)
+            setHasClickedLike(false)
+        } catch (error) {
+            console.log(error)
+            alert(error)
+            setHasClickedLike(false)
+        }
+    }
+
+    const unlike = async (id: string) => {
+        try {
+            setHasClickedLike(true)
+            await useDeleteLike(id)
+            setLikesByPost(params.postId)
+            setHasClickedLike(false)
+        } catch (error) {
+            console.log(error)
+            alert(error)
+            setHasClickedLike(false)
+        }
+    }
+
+    const likeOrUnlike = () => {
+        if (!contextUser?.user) return setIsLoginOpen(true)
+
+        let res = useIsLiked(contextUser.user.id, params.postId, likesByPost)
+        if (!res) {
+            like()
+        } else {
+            likesByPost.forEach(like => {
+                if (contextUser?.user?.id && contextUser.user.id == like.user_id && like.post_id == params.postId) {
+                    unlike(like.id)
+                }
+            })
+        }
+    }
+
+    const deletePost = async () => {
+        let res = confirm('Are you sure you want to delete this post?')
+        if (!res) return
+
+        setIsDeleteing(true)
+
+        try {
+            await useDeletePostById(params?.postId, post?.video_url)
+            router.push(`/profile/${params.userId}`)
+            setIsDeleteing(false)
+        } catch (error) {
+            console.log(error)
+            setIsDeleteing(false)
+            alert(error)
+        }
+    }
 
   return (
     <>
@@ -30,7 +110,7 @@ const CommentsHeader = ({ post, params }: CommentsHeaderCompTypes) => {
         <div className="flex items-center">
             <Link href={`/profile/${post?.user_id}`}>
                 {post?.profile.image ? (
-                    <img className="rounded-full lg:mx-0 mx-auto" width="40" src={post?.profile.image} />
+                    <img className="rounded-full lg:mx-0 mx-auto" width="40" src={useCreateBucketUrl(post?.profile.image)} />
                 ) : (
                     <div className="w-[40px] h-[40px] bg-gray-200 rounded-full"></div>
                 )}
@@ -52,7 +132,7 @@ const CommentsHeader = ({ post, params }: CommentsHeaderCompTypes) => {
             </div>
         </div>
 
-        {true ? (
+        {contextUser?.user?.id == post?.user_id ? (
             <div>
                 {isDeleteing ? (
                     <BiLoaderCircle className="animate-spin" size="25"/>
@@ -81,13 +161,13 @@ const CommentsHeader = ({ post, params }: CommentsHeaderCompTypes) => {
                       className="rounded-full bg-gray-200 p-2 cursor-pointer"
                   >
                       {!hasClickedLike ? (
-                          <AiFillHeart size="25"/>
-                      ) : (
-                          <BiLoaderCircle className="animate-spin" size="25"/>
-                      )}
+                            <AiFillHeart color={likesByPost.length > 0 && userLiked ? '#ff2626' : ''} size="25"/>
+                        ) : (
+                            <BiLoaderCircle className="animate-spin" size="25"/>
+                        )}
                   </button>
                   <span className="text-xs pl-2 pr-4 text-gray-800 font-semibold">
-                      123
+                    {likesByPost.length}
                   </span>
               </div>
           </ClientOnly>
@@ -96,7 +176,7 @@ const CommentsHeader = ({ post, params }: CommentsHeaderCompTypes) => {
               <div className="rounded-full bg-gray-200 p-2 cursor-pointer">
                   <BsChatDots size={25} />
               </div>
-              <span className="text-xs pl-2 text-gray-800 font-semibold">1212</span>
+              <span className="text-xs pl-2 text-gray-800 font-semibold">{commentsByPost?.length}</span>
           </div>
       </div>
     </>

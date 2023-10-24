@@ -3,56 +3,37 @@ import ClientOnly from '../ClientOnly'
 import { CommentsCompTypes } from '@/app/types'
 import { BiLoaderCircle } from "react-icons/bi"
 import SingleComment from './SingleComment'
+import { useCommentStore } from '@/app/stores/comment'
+import { useGeneralStore } from '@/app/stores/general'
+import useCreateComment from '@/app/hooks/useCreateComment'
+import { useUser } from '@/app/context/user'
 
 
 const Comments = ({ params }: CommentsCompTypes) => {
 
+  let { commentsByPost, setCommentsByPost } = useCommentStore()
+  let { setIsLoginOpen } = useGeneralStore()
+
+  const contextUser = useUser()
   const [comment, setComment] = useState<string>('')
   const [inputFocused, setInputFocused] = useState<boolean>(false)
   const [isUploading, setIsUploading] = useState<boolean>(false)
 
   const addComment = async () => {
-    console.log('addComment');
+    if (!contextUser?.user) return setIsLoginOpen(true)
+
+    try {
+        setIsUploading(true)
+        await useCreateComment(contextUser?.user?.id, params?.postId, comment)
+        setCommentsByPost(params?.postId)
+        setComment('')
+        setIsUploading(false)
+    } catch (error) {
+        console.log(error)
+        alert(error)
+    }
   }
 
-  const commentsByPost = [
-    {
-      id: "123",
-      user_id: '456',
-      post_id: '123',
-      text: 'longkhongmap',
-      created_at: 'date here',
-      profile: {
-        user_id: '456',
-        name: 'longbi',
-        image: 'https://placehold.co/100'
-      }
-    },
-    {
-      id: "123",
-      user_id: '456',
-      post_id: '123',
-      text: 'longkhongmap',
-      created_at: 'date here',
-      profile: {
-        user_id: '456',
-        name: 'longbi',
-        image: 'https://placehold.co/100'
-      }
-    },
-    {
-      id: "123",
-      user_id: '456',
-      post_id: '123',
-      text: 'longkhongmap',
-      created_at: 'date here',
-      profile: {
-        user_id: '456',
-        name: 'longbi',
-        image: 'https://placehold.co/100'
-      }
-    }
-  ]
   return (
     <>
       <div

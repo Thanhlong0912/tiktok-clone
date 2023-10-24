@@ -5,6 +5,7 @@ import { BiErrorCircle } from "react-icons/bi"
 import { useEffect } from "react"
 import Link from "next/link"
 import { PostUserCompTypes } from "@/app/types"
+import useCreateBucketUrl from '@/app/hooks/useCreateBucketUrl'
 
 const PostUser = ({ post }: PostUserCompTypes) => {
 
@@ -32,7 +33,7 @@ const PostUser = ({ post }: PostUserCompTypes) => {
                       muted
                       loop
                       className="aspect-[3/4] object-cover rounded-md"
-                      src={post.video_url}
+                      src={useCreateBucketUrl(post.video_url)}
                   />
               </Link>
           )}
@@ -42,7 +43,7 @@ const PostUser = ({ post }: PostUserCompTypes) => {
               </p>
               <div className="flex items-center gap-1 -ml-1 text-gray-600 font-bold text-xs">
                   <SiSoundcharts size="15"/>
-                  3%
+                  100%
                   <BiErrorCircle  size="16"/>
               </div>
           </div>

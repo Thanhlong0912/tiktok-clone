@@ -1,22 +1,90 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { BiLoaderCircle } from "react-icons/bi"
 import { AiFillHeart } from "react-icons/ai"
 import { FaShare, FaCommentDots } from "react-icons/fa"
 import { Comment, Like, PostMainLikesCompTypes } from "../types"
 import { useRouter } from 'next/navigation'
+import useIsLiked from '../hooks/useIsLiked'
+import useDeleteLike from '../hooks/useDeleteLike'
+import useCreateLike from '../hooks/useCreateLike'
+import useGetLikesByPostId from '../hooks/useGetLikesByPostId'
+import useGetCommentsByPostId from '../hooks/useGetCommentsByPostId'
+import { useUser } from '../context/user'
+import { useGeneralStore } from '../stores/general'
 
 const PostMainLikes = ({ post }: PostMainLikesCompTypes) => {
 
-  const router = useRouter()
+    let { setIsLoginOpen } = useGeneralStore();
 
-  const [hasClickedLike, setHasClickedLike] = useState<boolean>(false)
+    const router = useRouter()
+    const contextUser = useUser()
+    const [hasClickedLike, setHasClickedLike] = useState<boolean>(false)
     const [userLiked, setUserLiked] = useState<boolean>(false)
     const [comments, setComments] = useState<Comment[]>([])
     const [likes, setLikes] = useState<Like[]>([])
 
-  const likeOrUnlike = () => {
-    console.log('likeOrUnlike');
-  }
+    useEffect(() => {
+        getAllLikesByPost()
+        getAllCommentsByPost()
+    }, [post])
+
+    useEffect(() => { hasUserLikedPost() }, [likes, contextUser])
+
+    const getAllCommentsByPost = async () => {
+        let result = await useGetCommentsByPostId(post?.id)
+        setComments(result)
+    }
+
+    const getAllLikesByPost = async () => {
+        let result = await useGetLikesByPostId(post?.id)
+        setLikes(result)
+    }
+
+    const hasUserLikedPost = () => {
+        if (!contextUser) return
+
+        if (likes?.length < 1 || !contextUser?.user?.id) {
+            setUserLiked(false)
+            return
+        }
+        let res = useIsLiked(contextUser?.user?.id, post?.id, likes)
+        setUserLiked(res ? true : false)
+    }
+
+    const like = async () => {
+        setHasClickedLike(true)
+        await useCreateLike(contextUser?.user?.id || '', post?.id)
+        await getAllLikesByPost()
+        hasUserLikedPost()
+        setHasClickedLike(false)
+    }
+
+    const unlike = async (id: string) => {
+        setHasClickedLike(true)
+        await useDeleteLike(id)
+        await getAllLikesByPost()
+        hasUserLikedPost()
+        setHasClickedLike(false)
+    }
+
+    const likeOrUnlike = () => {
+        if (!contextUser?.user?.id) {
+            setIsLoginOpen(true)
+            return
+        }
+
+        let res = useIsLiked(contextUser?.user?.id, post?.id, likes)
+
+        if (!res) {
+            like()
+        } else {
+            likes.forEach((like: Like) => {
+                if (contextUser?.user?.id == like?.user_id && like?.post_id == post?.id) {
+                    unlike(like?.id)
+                }
+            })
+        }
+    }
 
   return (
       <>
@@ -54,7 +122,7 @@ const PostMainLikes = ({ post }: PostMainLikesCompTypes) => {
                     <div className="rounded-full bg-gray-200 p-2 cursor-pointer">
                         <FaShare size="25"/>
                     </div>
-                    <span className="text-xs text-gray-800 font-semibold">55</span>
+                    <span className="text-xs text-gray-800 font-semibold">1000</span>
                 </button>
             </div>
         </div>
