@@ -1,5 +1,3 @@
-"use client"
-
 import React, { useState } from 'react'
 import { AiOutlineClose } from 'react-icons/ai'
 import Login from '@/app/components/auth/Login'

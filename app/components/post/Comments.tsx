@@ -8,7 +8,6 @@ import { useGeneralStore } from '@/app/stores/general'
 import useCreateComment from '@/app/hooks/useCreateComment'
 import { useUser } from '@/app/context/user'
 
-
 const Comments = ({ params }: CommentsCompTypes) => {
 
   let { commentsByPost, setCommentsByPost } = useCommentStore()

@@ -1,17 +1,16 @@
 "use client"
 
-import ClientOnly from '@/app/components/ClientOnly'
-import MainLayout from '@/app/layouts/MainLayOut'
-import { ProfilePageTypes, User } from '@/app/types'
+import PostUser from "@/app/components/profile/PostUser"
+import MainLayout from "@/app/layouts/MainLayout"
 import { BsPencil } from "react-icons/bs"
-import React, { useEffect } from 'react'
-import PostUser from '@/app/components/profile/PostUser'
-import EditProfileOverlay from '@/app/components/profile/EditProfileOverlay'
-import { useUser } from '@/app/context/user'
-import { usePostStore } from '@/app/stores/post'
-import { useProfileStore } from '@/app/stores/profile'
-import { useGeneralStore } from '@/app/stores/general'
-import useCreateBucketUrl from '@/app/hooks/useCreateBucketUrl'
+import { useEffect } from "react"
+import { useUser } from "@/app/context/user"
+import ClientOnly from "@/app/components/ClientOnly"
+import { ProfilePageTypes, User } from "@/app/types"
+import { usePostStore } from "@/app/stores/post"
+import { useProfileStore } from "@/app/stores/profile"
+import { useGeneralStore } from "@/app/stores/general"
+import useCreateBucketUrl from "@/app/hooks/useCreateBucketUrl"
 
 const Profile = ({ params }: ProfilePageTypes) => {
     const contextUser = useUser()
