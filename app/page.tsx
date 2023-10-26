@@ -5,8 +5,11 @@ import { usePostStore } from "@/app/stores/post"
 import ClientOnly from "./components/ClientOnly"
 import PostMain from "./components/PostMain"
 import MainLayout from "./layouts/MainLayout"
+import { usePathname } from "next/navigation"
 
 export default function Home() {
+
+  const pathname = usePathname()
 
   let { allPosts, setAllPosts } = usePostStore();
   useEffect(() => { setAllPosts()}, [])
@@ -14,7 +17,7 @@ export default function Home() {
   return (
     <>
       <MainLayout>
-        <div className="mt-[80px]  w-[calc(100%-90px)] max-w-[690px] ml-auto">
+        <div className="mt-[80px] w-full max-w-[690px] ml-auto">
           <ClientOnly>
             {allPosts.map((post, index) => (
               <PostMain post={post} key={index} />
