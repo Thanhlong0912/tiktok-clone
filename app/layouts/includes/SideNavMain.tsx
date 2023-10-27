@@ -20,8 +20,8 @@ const SideNavMain = () => {
       <div
           id="SideNavMain"
           className={`
-              fixed z-20 bg-white pt-[70px] h-full lg:border-r-0 border-r w-0 overflow-auto
-              ${pathname === '/' ? 'lg:w-[310px]' : 'lg:w-[220px]'}
+              fixed z-20 bg-white pt-[70px] h-full lg:border-r-0 border-r overflow-auto
+              ${pathname === '/' ? 'lg:w-[310px] w-0' : 'lg:w-[220px]'}
           `}
       >
 
