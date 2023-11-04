@@ -30,7 +30,6 @@ const PostUser = ({ post }: PostUserCompTypes) => {
               <Link href={`/post/${post.id}/${post.user_id}`}>
                   <video
                       id={`video${post.id}`}
-                      muted
                       loop
                       className="aspect-[3/4] object-cover rounded-md"
                       src={useCreateBucketUrl(post.video_url)}

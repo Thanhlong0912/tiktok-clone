@@ -174,7 +174,6 @@ const Upload = () => {
                             <video
                                 autoPlay
                                 loop
-                                muted
                                 className="absolute rounded-3xl object-cover z-10 p-[13px] w-full h-full"
                                 src={fileDisplay}
                             />

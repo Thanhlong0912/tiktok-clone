@@ -94,7 +94,6 @@ const Post = ({ params }: PostPageTypes) => {
                             autoPlay
                             controls
                             loop
-                            muted
                             className="h-screen mx-auto"
                             src={useCreateBucketUrl(postById.video_url)}
                         />

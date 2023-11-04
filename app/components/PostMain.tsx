@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { AiFillHeart } from "react-icons/ai"
 import { ImMusic } from "react-icons/im"
 import { PostMainCompTypes } from '../types'
@@ -7,6 +7,12 @@ import PostMainLikes from './PostMainLikes'
 import useCreateBucketUrl from '../hooks/useCreateBucketUrl'
 
 const PostMain = ({ post }: PostMainCompTypes) => {
+
+    const [isFollow, setIsFollow] = useState(false);
+    const handleClick = () => {
+        setIsFollow(!isFollow);
+    };
+
   useEffect(()=>{
     const video = document.getElementById(`video-${post?.id}`) as HTMLVideoElement
     const postMainElement = document.getElementById(`PostMain-${post.id}`);
@@ -34,10 +40,17 @@ const PostMain = ({ post }: PostMainCompTypes) => {
                         {post.profile.name}
                     </span>
                 </Link>
-
-                <button className="border text-[15px] px-[21px] py-0.5 border-[#F02C56] text-[#F02C56] hover:bg-[#ffeef2] font-semibold rounded-md">
-                    Follow
-                </button>
+                <div onClick={handleClick}>
+                    {isFollow ? (
+                        <button className="border text-[15px] px-[21px] py-0.5 border-[#1b1c21] text-[#1b1c21] hover:bg-[#eeeeee] font-semibold rounded-md">
+                        Following
+                    </button>
+                    ) : (
+                    <button className="border text-[15px] px-[21px] py-0.5 border-[#F02C56] text-[#F02C56] hover:bg-[#ffeef2] font-semibold rounded-md">
+                        Follow
+                    </button>
+                    )}
+                </div>
             </div>
             <p className="text-[15px] pb-0.5 break-words md:max-w-[400px] max-w-[300px]">{post.text}</p>
             <p className="text-[14px] text-gray-500 pb-0.5">#longbi #longkhongmap #longbabe</p>
@@ -55,7 +68,6 @@ const PostMain = ({ post }: PostMainCompTypes) => {
                         id={`video-${post.id}`}
                         loop
                         controls
-                        muted
                         className="rounded-xl object-cover mx-auto h-full"
                         src={useCreateBucketUrl(post?.video_url)}
                     />
