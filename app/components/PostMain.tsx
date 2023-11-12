@@ -5,8 +5,11 @@ import { PostMainCompTypes } from '../types'
 import Link from 'next/link'
 import PostMainLikes from './PostMainLikes'
 import useCreateBucketUrl from '../hooks/useCreateBucketUrl'
+import { useRouter } from 'next/navigation'
 
 const PostMain = ({ post }: PostMainCompTypes) => {
+
+    const router = useRouter()
 
     const [isFollow, setIsFollow] = useState(false);
     const handleClick = () => {
@@ -62,6 +65,7 @@ const PostMain = ({ post }: PostMainCompTypes) => {
 
             <div className="mt-2.5 flex">
                 <div
+                    onClick={() => router.push(`/post/${post?.id}/${post?.profile?.user_id}`)}
                     className="relative min-h-[480px] max-h-[580px] max-w-[260px] flex items-center bg-black rounded-xl cursor-pointer"
                 >
                     <video
