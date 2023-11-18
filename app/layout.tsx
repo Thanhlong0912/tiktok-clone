@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import AllOverlays from './components/AllOverlays'
 import './globals.css'
 import UserProvider from './context/user'
+import ScrollToTopButton from './components/ScrollToTopButton'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <body className='overflow-x-hidden'>
           <AllOverlays />
           {children}
+          <ScrollToTopButton />
         </body>
       </UserProvider>
     </html>
