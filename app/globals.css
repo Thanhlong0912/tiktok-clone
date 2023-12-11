@@ -3,23 +3,23 @@
 @tailwind utilities;
 
 /* ===== Scrollbar CSS ===== */
-  /* Firefox */
-  * {
-    scrollbar-width: auto;
-    scrollbar-color: #fb626b #F8DAD0;
-  }
+/* Firefox */
+* {
+  scrollbar-width: auto;
+  scrollbar-color: #fb626b #F8DAD0;
+}
 
-  /* Chrome, Edge, and Safari */
-  *::-webkit-scrollbar {
-    width: 12px;
-  }
+/* Chrome, Edge, and Safari */
+*::-webkit-scrollbar {
+  width: 12px;
+}
 
-  *::-webkit-scrollbar-track {
-    background: #F8DAD0;
-  }
+*::-webkit-scrollbar-track {
+  background: #F8DAD0;
+}
 
-  *::-webkit-scrollbar-thumb {
-    background-color: #fb626b;
-    border-radius: 10px;
-    border: 2px solid #F8DAD0;
-  }
+*::-webkit-scrollbar-thumb {
+  background-color: #fb626b;
+  border-radius: 10px;
+  border: 2px solid #F8DAD0;
+}
