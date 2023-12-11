@@ -119,12 +119,12 @@ const CommentsHeader = ({ post, params }: CommentsHeaderCompTypes) => {
 
                 <Link
                     href={`/profile/${post?.user_id}`}
-                    className="relative z-10 text-[17px] font-semibold hover:underline"
+                    className="relative z-10 text-[17px] font-semibold hover:underline dark:text-white"
                 >
                     {post?.profile.name}
                 </Link>
 
-                <div className="relative z-0 text-[13px] -mt-5 font-light">
+                <div className="relative z-0 text-[13px] -mt-5 font-light dark:text-white">
                     {post?.profile.name}
                     <span className="relative -top-[2px] text-[30px] pl-1 pr-0.5 ">.</span>
                     <span className="font-medium">{moment(post?.created_at).calendar()}</span>
@@ -145,9 +145,9 @@ const CommentsHeader = ({ post, params }: CommentsHeaderCompTypes) => {
         ) : null}
       </div>
 
-      <p className="px-8 mt-4 text-sm">{post?.text}</p>
+      <p className="px-8 mt-4 text-sm dark:text-white">{post?.text}</p>
 
-      <p className="flex item-center gap-2 px-8 mt-4 text-sm font-bold">
+      <p className="flex item-center gap-2 px-8 mt-4 text-sm font-bold dark:text-white">
           <ImMusic size="17"/>
           original sound - {post?.profile.name}
       </p>
@@ -158,7 +158,7 @@ const CommentsHeader = ({ post, params }: CommentsHeaderCompTypes) => {
                   <button
                       disabled={hasClickedLike}
                       onClick={() => likeOrUnlike()}
-                      className="rounded-full bg-gray-200 p-2 cursor-pointer"
+                      className="rounded-full bg-gray-200 dark:bg-medium p-2 cursor-pointer"
                   >
                       {!hasClickedLike ? (
                             <AiFillHeart color={likesByPost.length > 0 && userLiked ? '#ff2626' : ''} size="25"/>
@@ -166,17 +166,17 @@ const CommentsHeader = ({ post, params }: CommentsHeaderCompTypes) => {
                             <BiLoaderCircle className="animate-spin" size="25"/>
                         )}
                   </button>
-                  <span className="text-xs pl-2 pr-4 text-gray-800 font-semibold">
+                  <span className="text-xs pl-2 pr-4 text-gray-800 dark:text-white font-semibold">
                     {likesByPost.length}
                   </span>
               </div>
           </ClientOnly>
 
           <div className="pb-4 text-center flex items-center">
-              <div className="rounded-full bg-gray-200 p-2 cursor-pointer">
+              <div className="rounded-full bg-gray-200 dark:bg-medium p-2 cursor-pointer">
                   <BsChatDots size={25} />
               </div>
-              <span className="text-xs pl-2 text-gray-800 font-semibold">{commentsByPost?.length}</span>
+              <span className="text-xs pl-2 text-gray-800 dark:text-white font-semibold">{commentsByPost?.length}</span>
           </div>
       </div>
     </>

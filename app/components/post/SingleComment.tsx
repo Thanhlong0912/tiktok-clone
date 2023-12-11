@@ -42,10 +42,10 @@ const SingleComment = ({ comment, params }: SingleCommentCompTypes) => {
             </Link>
             <div className="ml-14 pt-0.5 w-full">
 
-                <div className="text-[18px] font-semibold flex items-center justify-between">
+                <div className="text-[18px] font-semibold flex items-center justify-between dark:text-white">
                     <span className="flex items-center">
                         {comment?.profile?.name} -
-                        <span className="text-[12px] text-gray-600 font-light ml-1">
+                        <span className="text-[12px] text-gray-600 dark:text-white font-light ml-1">
                             {moment(comment?.created_at).calendar()}
                         </span>
                     </span>
@@ -63,7 +63,7 @@ const SingleComment = ({ comment, params }: SingleCommentCompTypes) => {
                     ) : null}
                 </div>
 
-                <p className="text-[15px] font-light">{comment.text}</p>
+                <p className="text-[15px] font-light dark:text-white">{comment.text}</p>
 
             </div>
         </div>

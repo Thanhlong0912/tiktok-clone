@@ -80,9 +80,9 @@ const Upload = () => {
   return (
     <>
       <UploadLayout>
-            <div className="w-full mt-[80px] mb-[40px] bg-white shadow-lg rounded-md py-6 md:px-10 px-4">
+            <div className="w-full mt-[80px] mb-[40px] bg-white dark:bg-medium shadow-lg rounded-md py-6 md:px-10 px-4">
                 <div>
-                    <h1 className="text-[23px] font-semibold">Upload video</h1>
+                    <h1 className="text-[23px] font-semibold dark:text-white">Upload video</h1>
                     <h2 className="text-gray-400 mt-1">Post a video to your account</h2>
                 </div>
 
@@ -114,7 +114,7 @@ const Upload = () => {
                             "
                         >
                             <BiSolidCloudUpload size="40" color="#b3b3b1"/>
-                            <p className="mt-4 text-[17px]">Select video to upload</p>
+                            <p className="mt-4 text-[17px] dark:text-gray-400">Select video to upload</p>
                             <p className="mt-1.5 text-gray-500 text-[13px]">Or drag and drop a file</p>
                             <p className="mt-12 text-gray-400 text-sm">MP4</p>
                             <p className="mt-2 text-gray-400 text-[13px]">Up to 30 minutes</p>
@@ -211,7 +211,7 @@ const Upload = () => {
 
                         <div className="mt-5">
                             <div className="flex items-center justify-between">
-                                <div className="mb-1 text-[15px]">Caption</div>
+                                <div className="mb-1 text-[15px] dark:text-white">Caption</div>
                                 <div className="text-gray-400 text-[12px]">{caption.length}/150</div>
                             </div>
                             <input
@@ -233,7 +233,7 @@ const Upload = () => {
                             <button
                                 disabled={isUploading}
                                 onClick={() => discard()}
-                                className="px-10 py-2.5 mt-8 border text-[16px] hover:bg-gray-100 rounded-sm"
+                                className="px-10 py-2.5 mt-8 border text-[16px] hover:bg-gray-100 dark:text-white dark:hover:bg- rounded-sm"
                             >
                                 Discard
                             </button>

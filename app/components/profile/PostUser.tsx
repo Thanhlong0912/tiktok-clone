@@ -23,7 +23,7 @@ const PostUser = ({ post }: PostUserCompTypes) => {
     <>
       <div className="relative brightness-90 hover:brightness-[1.1] cursor-pointer">
           {!post.video_url ? (
-              <div className="absolute flex items-center justify-center top-0 left-0 aspect-[3/4] w-full object-cover rounded-md bg-black">
+              <div className="absolute flex items-center justify-center top-0 left-0 aspect-[3/4] w-full object-cover rounded-md bg-black dark:bg-white">
                   <AiOutlineLoading3Quarters className="animate-spin ml-1" size="80" color="#FFFFFF" />
               </div>
           ) : (
@@ -37,10 +37,10 @@ const PostUser = ({ post }: PostUserCompTypes) => {
               </Link>
           )}
           <div className="px-1">
-              <p className="text-gray-700 text-[15px] pt-1 break-words">
+              <p className="text-gray-700 dark:text-white text-[15px] pt-1 break-words">
                   {post.text}
               </p>
-              <div className="flex items-center gap-1 -ml-1 text-gray-600 font-bold text-xs">
+              <div className="flex items-center gap-1 -ml-1 text-gray-600 dark:text-white font-bold text-xs">
                   <SiSoundcharts size="15"/>
                   100%
                   <BiErrorCircle  size="16"/>

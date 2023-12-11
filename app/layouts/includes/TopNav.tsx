@@ -11,6 +11,7 @@ import { RandomUsers } from '@/app/types';
 import { debounce } from 'debounce';
 import useSearchProfilesByName from '@/app/hooks/useSearchProfilesByName';
 import useCreateBucketUrl from '@/app/hooks/useCreateBucketUrl';
+import ThemeToggle from './ThemeToggle';
 
 const TopNav = () => {
   const userContext = useUser()
@@ -45,7 +46,7 @@ const TopNav = () => {
 
   return (
     <>
-      <div id="TopNav" className="fixed bg-white z-30 flex items-center w-full border-b h-[60px]">
+      <div id="TopNav" className="fixed bg-white dark:bg-dark z-30 flex items-center w-full border-b h-[60px]">
         <div className={`flex items-center justify-between gap-6 w-full px-4 mx-auto ${pathname === '/' ? 'max-w-[1150px]' : ''}`}>
 
             <Link href="/">
@@ -83,13 +84,13 @@ const TopNav = () => {
                     </div>
             </div>
 
-            <div className="flex items-center gap-3 ">
+            <div className="flex items-center gap-3">
                 <button
                     onClick={() => goTo()}
-                    className="flex items-center border rounded-sm py-[6px] hover:bg-gray-100 pl-1.5"
+                    className="flex items-center border rounded-sm py-[6px] hover:bg-gray-100 dark:hover:bg-medium pl-1.5"
                 >
                     <AiOutlinePlus color="#000000" size="22"/>
-                    <span className="px-2 font-medium text-[15px]">Upload</span>
+                    <span className="px-2 font-medium text-[15px] dark:text-white">Upload</span>
                 </button>
 
                 {!userContext?.user?.id ? (
@@ -115,29 +116,35 @@ const TopNav = () => {
                             </button>
 
                             {showMenu ? (
-                                <div className="absolute bg-white rounded-lg py-1.5 w-[200px] shadow-xl border top-[40px] right-0">
-                                    <button
-                                        onClick={() => {
-                                            router.push(`/profile/${userContext?.user?.id}`)
-                                            setShowMenu(false)
-                                        }}
-                                        className="flex items-center w-full justify-start py-3 px-2 hover:bg-gray-100 cursor-pointer"
-                                    >
-                                        <BiUser size="20"/>
-                                        <span className="pl-2 font-semibold text-sm">Profile</span>
-                                    </button>
-                                    <button
-                                        onClick={async () => {
-                                            await userContext?.logout()
-                                            setShowMenu(false)
-                                        }}
-                                        className="flex items-center justify-start w-full py-3 px-1.5 hover:bg-gray-100 border-t cursor-pointer"
-                                    >
-                                        <FiLogOut size={20} />
-                                        <span className="pl-2 font-semibold text-sm">Log out</span>
-                                    </button>
-                                </div>
+                                <>
+                                    <div className="absolute bg-white dark:bg-dark dark:text-white rounded-lg py-1.5 w-[150px] shadow-xl border top-[40px] right-0">
+                                        <button
+                                            onClick={() => {
+                                                router.push(`/profile/${userContext?.user?.id}`)
+                                                setShowMenu(false)
+                                            }}
+                                            className="flex items-center w-full justify-start py-3 px-2 hover:bg-gray-100 dark:hover:bg-medium cursor-pointer"
+                                        >
+                                            <BiUser size="20"/>
+                                            <span className="pl-2 font-semibold text-sm">Profile</span>
+                                        </button>
+
+                                        <button
+                                            onClick={async () => {
+                                                await userContext?.logout()
+                                                setShowMenu(false)
+                                            }}
+                                            className="flex items-center justify-start w-full py-3 px-1.5 hover:bg-gray-100 dark:hover:bg-medium border-t cursor-pointer"
+                                        >
+                                            <FiLogOut size={20} />
+                                            <span className="pl-2 font-semibold text-sm">Log out</span>
+                                        </button>
+                                    </div>
+                                </>
                             ) : null}
+                        </div>
+                        <div className='ml-2'>
+                            <ThemeToggle />
                         </div>
                     </div>
                 )}

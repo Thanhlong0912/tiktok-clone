@@ -94,7 +94,7 @@ const PostMainLikes = ({ post }: PostMainLikesCompTypes) => {
                     <button
                         disabled={hasClickedLike}
                         onClick={() => likeOrUnlike()}
-                        className="rounded-full bg-gray-200 p-2 cursor-pointer"
+                        className="rounded-full bg-gray-200 dark:bg-medium p-2 cursor-pointer"
                     >
                         {!hasClickedLike ? (
                             <AiFillHeart color={likes?.length > 0 && userLiked ? '#ff2626' : ''} size="25"/>
@@ -103,7 +103,7 @@ const PostMainLikes = ({ post }: PostMainLikesCompTypes) => {
                         )}
 
                     </button>
-                    <span className="text-xs text-gray-800 font-semibold">
+                    <span className="text-xs text-gray-800 dark:text-white font-semibold">
                         {likes?.length}
                     </span>
                 </div>
@@ -112,17 +112,17 @@ const PostMainLikes = ({ post }: PostMainLikesCompTypes) => {
                     onClick={() => router.push(`/post/${post?.id}/${post?.profile?.user_id}`)}
                     className="pb-4 text-center"
                 >
-                    <div className="rounded-full bg-gray-200 p-2 cursor-pointer">
+                    <div className="rounded-full bg-gray-200 dark:bg-medium p-2 cursor-pointer">
                         <FaCommentDots size="25"/>
                     </div>
-                    <span className="text-xs text-gray-800 font-semibold">{comments?.length}</span>
+                    <span className="text-xs text-gray-800 dark:text-white font-semibold">{comments?.length}</span>
                 </button>
 
                 <button className="text-center">
-                    <div className="rounded-full bg-gray-200 p-2 cursor-pointer">
+                    <div className="rounded-full bg-gray-200 dark:bg-medium p-2 cursor-pointer">
                         <FaShare size="25"/>
                     </div>
-                    <span className="text-xs text-gray-800 font-semibold">1000</span>
+                    <span className="text-xs text-gray-800 dark:text-white font-semibold">1000</span>
                 </button>
             </div>
         </div>

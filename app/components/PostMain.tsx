@@ -39,13 +39,13 @@ const PostMain = ({ post }: PostMainCompTypes) => {
         <div className="pl-3 w-full px-4">
             <div className="flex items-center justify-between pb-0.5">
                 <Link href={`/profile/${post.profile.user_id}`}>
-                    <span className="font-bold hover:underline cursor-pointer">
+                    <span className="font-bold hover:underline cursor-pointer dark:text-white">
                         {post.profile.name}
                     </span>
                 </Link>
                 <div onClick={handleClick}>
                     {isFollow ? (
-                        <button className="border text-[15px] px-[21px] py-0.5 border-[#1b1c21] text-[#1b1c21] hover:bg-[#eeeeee] font-semibold rounded-md">
+                        <button className="border text-[15px] px-[21px] py-0.5 border-[#1b1c21] text-[#1b1c21] hover:bg-[#eeeeee] dark:text-white dark:border-white dark:hover:bg-[#b8b8b8] font-semibold rounded-md">
                         Following
                     </button>
                     ) : (
@@ -55,11 +55,11 @@ const PostMain = ({ post }: PostMainCompTypes) => {
                     )}
                 </div>
             </div>
-            <p className="text-[15px] pb-0.5 break-words md:max-w-[400px] max-w-[300px]">{post.text}</p>
-            <p className="text-[14px] text-gray-500 pb-0.5">#longbi #longkhongmap #longbabe</p>
+            <p className="text-[15px] pb-0.5 break-words md:max-w-[400px] max-w-[300px] dark:text-white">{post.text}</p>
+            <p className="text-[14px] text-gray-500 dark:text-white pb-0.5">#longbi #longkhongmap #longbabe</p>
             <p className="text-[14px] pb-0.5 flex items-center font-semibold">
                 <ImMusic size="17"/>
-                <span className="px-1">original sound - LONGBI</span>
+                <span className="px-1 dark:text-white">original sound - LONGBI</span>
                 <AiFillHeart size="20"/>
             </p>
 

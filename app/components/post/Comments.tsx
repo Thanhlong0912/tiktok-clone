@@ -37,14 +37,14 @@ const Comments = ({ params }: CommentsCompTypes) => {
     <>
       <div
           id="Comments"
-          className="relative bg-[#F8F8F8] z-0 w-full h-[calc(100%-273px)] border-t-2 overflow-auto"
+          className="relative bg-[#F8F8F8] dark:bg-dark z-0 w-full h-[calc(100%-273px)] border-t-2 overflow-auto"
       >
 
           <div className="pt-2"/>
 
           <ClientOnly>
               {commentsByPost.length < 1 ? (
-                  <div className="text-center mt-6 text-xl text-gray-500">No comments...</div>
+                  <div className="text-center mt-6 text-xl text-gray-500 dark:text-white">No comments...</div>
               ) : (
                   <div>
                       {commentsByPost.map((comment, index) => (
@@ -60,7 +60,7 @@ const Comments = ({ params }: CommentsCompTypes) => {
 
       <div
           id="CreateComment"
-          className="absolute flex items-center justify-between bottom-0 bg-white h-[85px] lg:max-w-[550px] w-full py-5 px-8 border-t-2"
+          className="absolute flex items-center justify-between bottom-0 bg-white dark:bg-dark h-[85px] lg:max-w-[550px] w-full py-5 px-8 border-t-2"
       >
           <div
               className={`
@@ -84,7 +84,7 @@ const Comments = ({ params }: CommentsCompTypes) => {
                   onClick={() => addComment()}
                   className={`
                       font-semibold text-sm ml-5 pr-1
-                      ${comment ? 'text-[#F02C56] cursor-pointer' : 'text-gray-400'}
+                      ${comment ? 'text-[#F02C56] cursor-pointer' : 'text-gray-400 dark:text-white'}
                   `}
               >
                   Post

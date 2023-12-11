@@ -116,12 +116,12 @@ const EditProfileOverlay = () => {
         >
             <div
                 className={`
-                    relative bg-white w-full max-w-[700px] sm:h-[580px] h-[655px] mx-3 p-4 rounded-lg mb-10
+                    relative bg-white dark:bg-dark w-full max-w-[700px] sm:h-[580px] h-[655px] mx-3 p-4 rounded-lg mb-10
                     ${!uploadedImage ? 'h-[655px]' : 'h-[580px]'}
                 `}
             >
                 <div className="absolute flex items-center justify-between w-full p-5 left-0 top-0 border-b border-b-gray-300">
-                    <h1 className="text-[22px] font-medium">
+                    <h1 className="text-[22px] font-medium dark:text-white">
                         Edit profile
                     </h1>
                     <button
@@ -141,7 +141,7 @@ const EditProfileOverlay = () => {
                                 id="ProfilePhotoSection"
                                 className="flex flex-col border-b sm:h-[118px] h-[145px] px-1.5 py-2 w-full"
                             >
-                                <h3 className="font-semibold text-[15px] sm:mb-0 mb-1 text-gray-700 sm:w-[160px] sm:text-left text-center">
+                                <h3 className="font-semibold text-[15px] sm:mb-0 mb-1 text-gray-700 dark:text-white sm:w-[160px] sm:text-left text-center">
                                     Profile photo
                                 </h3>
 
@@ -168,7 +168,7 @@ const EditProfileOverlay = () => {
                                 id="UserNameSection"
                                 className="flex flex-col border-b sm:h-[118px]  px-1.5 py-2 mt-1.5  w-full"
                             >
-                                <h3 className="font-semibold text-[15px] sm:mb-0 mb-1 text-gray-700 sm:w-[160px] sm:text-left text-center">
+                                <h3 className="font-semibold text-[15px] sm:mb-0 mb-1 text-gray-700 dark:text-white sm:w-[160px] sm:text-left text-center">
                                     Name
                                 </h3>
 
@@ -195,7 +195,7 @@ const EditProfileOverlay = () => {
                                 id="UserBioSection"
                                 className="flex flex-col sm:h-[120px]  px-1.5 py-2 mt-2 w-full"
                             >
-                                <h3 className="font-semibold text-[15px] sm:mb-0 mb-1 text-gray-700 sm:w-[160px] sm:text-left text-center">
+                                <h3 className="font-semibold text-[15px] sm:mb-0 mb-1 text-gray-700 dark:text-white sm:w-[160px] sm:text-left text-center">
                                     Bio
                                 </h3>
 
@@ -249,9 +249,9 @@ const EditProfileOverlay = () => {
                             <button
                                 disabled={isUpdating}
                                 onClick={() => setIsEditProfileOpen(false)}
-                                className="flex items-center border rounded-sm px-3 py-[6px] hover:bg-gray-100"
+                                className="flex items-center border rounded-sm px-3 py-[6px] hover:bg-gray-100 dark:hover:bg-medium"
                             >
-                                <span className="px-2 font-medium text-[15px]">Cancel</span>
+                                <span className="px-2 font-medium text-[15px] dark:text-white">Cancel</span>
                             </button>
 
                             <button

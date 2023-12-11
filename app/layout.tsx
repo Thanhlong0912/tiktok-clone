@@ -16,7 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <UserProvider>
-        <body className='overflow-x-hidden'>
+        <body className='overflow-x-hidden dark:bg-dark'>
           <AllOverlays />
           {children}
           <ScrollToTopButton />

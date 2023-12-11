@@ -55,7 +55,7 @@ const Login = () => {
   return (
     <>
        <div>
-        <h1 className="text-center text-[28px] mb-4 font-bold">Log in</h1>
+        <h1 className="text-center text-[28px] mb-4 font-bold dark:text-white">Log in</h1>
 
         <div className="px-6 pb-2">
             <TextInput
@@ -83,7 +83,7 @@ const Login = () => {
                 onClick={() => login()}
                 className={`
                     flex items-center justify-center w-full text-[17px] font-semibold text-white py-3 rounded-sm
-                    ${(!email || !password) ? 'bg-gray-200' : 'bg-[#F02C56]'}
+                    ${(!email || !password) ? 'bg-gray-200 text-black' : 'bg-[#F02C56]'}
                 `}
             >
                 {loading ? <BiLoaderCircle className="animate-spin" color="#ffffff" size={25} /> : 'Log in'}

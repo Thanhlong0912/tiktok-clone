@@ -76,7 +76,7 @@ const Register = () => {
   return (
     <>
        <div>
-          <h1 className="text-center text-[28px] mb-4 font-bold">Register</h1>
+          <h1 className="text-center text-[28px] mb-4 font-bold dark:text-white">Register</h1>
 
           <div className="px-6 pb-2">
 
@@ -128,7 +128,7 @@ const Register = () => {
                   onClick={() => register()}
                   className={`
                       flex items-center justify-center w-full text-[17px] font-semibold text-white py-3 rounded-sm
-                      ${(!name || !email || !password || !confirmPassword) ? 'bg-gray-200' : 'bg-[#F02C56]'}
+                      ${(!name || !email || !password || !confirmPassword) ? 'bg-gray-200 text-black' : 'bg-[#F02C56]'}
                   `}
               >
                   {loading ? <BiLoaderCircle className="animate-spin" color="#ffffff" size={25} /> : 'Register'}

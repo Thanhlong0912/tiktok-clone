@@ -103,7 +103,7 @@ const Post = ({ params }: PostPageTypes) => {
 
           </div>
 
-          <div id="InfoSection" className="lg:max-w-[550px] relative w-full h-full bg-white">
+          <div id="InfoSection" className="lg:max-w-[550px] relative w-full h-full bg-white dark:bg-dark">
             <div className="py-7" />
 
                 <ClientOnly>
