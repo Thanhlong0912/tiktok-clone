@@ -17,7 +17,7 @@ const MenuItem = ({ iconString, colorString, sizeString }: MenuItemTypes) => {
 
                   {icons()}
 
-                  <p className={`lg:block hidden pl-[9px] mt-0.5 font-semibold text-[17px] dark:text-white text-[${colorString}]`}>
+                  <p className={`lg:block hidden pl-[9px] mt-0.5 font-semibold text-[17px] text-[${colorString}]`}>
                       {iconString}
                   </p>
               </div>

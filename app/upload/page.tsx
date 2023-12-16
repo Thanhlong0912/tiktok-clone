@@ -233,7 +233,7 @@ const Upload = () => {
                             <button
                                 disabled={isUploading}
                                 onClick={() => discard()}
-                                className="px-10 py-2.5 mt-8 border text-[16px] hover:bg-gray-100 dark:text-white dark:hover:bg- rounded-sm"
+                                className="px-10 py-2.5 mt-8 border text-[16px] hover:bg-gray-100 dark:text-white dark:hover:text-black rounded-sm"
                             >
                                 Discard
                             </button>

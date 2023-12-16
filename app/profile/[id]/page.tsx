@@ -54,10 +54,10 @@ const Profile = ({ params }: ProfilePageTypes) => {
                     {contextUser?.user?.id == params?.id ? (
                         <button
                             onClick={() => setIsEditProfileOpen(isEditProfileOpen = !isEditProfileOpen)}
-                            className="flex item-center rounded-md py-1.5 px-3.5 mt-3 text-[15px] font-semibold border hover:bg-gray-100 dark:hover:bg-medium"
+                            className="flex item-center rounded-md py-1.5 px-3.5 mt-3 text-[15px] font-semibold border hover:bg-gray-100 dark:hover:bg-medium dark:text-white"
                         >
                             <BsPencil className="mt-0.5 mr-1" size="18"/>
-                            <span className="dark:text-white">Edit profile</span>
+                            <span>Edit profile</span>
                         </button>
                     ) : (
                         <button className="flex item-center rounded-md py-1.5 px-8 mt-3 text-[15px] text-white font-semibold bg-[#F02C56]">

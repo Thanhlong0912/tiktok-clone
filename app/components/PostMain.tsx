@@ -36,7 +36,7 @@ const PostMain = ({ post }: PostMainCompTypes) => {
             <img className="rounded-full max-h-[60px]" width="60" src={useCreateBucketUrl(post?.profile?.image)} />
         </div>
 
-        <div className="pl-3 w-full px-4">
+        <div className="w-full px-2">
             <div className="flex items-center justify-between pb-0.5">
                 <Link href={`/profile/${post.profile.user_id}`}>
                     <span className="font-bold hover:underline cursor-pointer dark:text-white">
@@ -45,11 +45,13 @@ const PostMain = ({ post }: PostMainCompTypes) => {
                 </Link>
                 <div onClick={handleClick}>
                     {isFollow ? (
-                        <button className="border text-[15px] px-[21px] py-0.5 border-[#1b1c21] text-[#1b1c21] hover:bg-[#eeeeee] dark:text-white dark:border-white dark:hover:bg-[#b8b8b8] font-semibold rounded-md">
+                        <button
+                        className="flex item-center rounded-md py-1.5 px-8 mt-3 text-[15px] text-white font-semibold bg-gray-400 dark:bg-gray-500"
+                    >
                         Following
                     </button>
                     ) : (
-                    <button className="border text-[15px] px-[21px] py-0.5 border-[#F02C56] text-[#F02C56] hover:bg-[#ffeef2] font-semibold rounded-md">
+                    <button className="flex item-center rounded-md py-1.5 px-8 mt-3 text-[15px] text-white font-semibold bg-rose-500">
                         Follow
                     </button>
                     )}

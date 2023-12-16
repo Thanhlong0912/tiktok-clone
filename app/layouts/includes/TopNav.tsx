@@ -87,10 +87,10 @@ const TopNav = () => {
             <div className="flex items-center gap-3">
                 <button
                     onClick={() => goTo()}
-                    className="flex items-center border rounded-sm py-[6px] hover:bg-gray-100 dark:hover:bg-medium pl-1.5"
+                    className="flex items-center border rounded-sm py-[6px] hover:bg-gray-100 dark:hover:bg-medium dark:text-white pl-1.5"
                 >
-                    <AiOutlinePlus color="#000000" size="22"/>
-                    <span className="px-2 font-medium text-[15px] dark:text-white">Upload</span>
+                    <AiOutlinePlus size="22"/>
+                    <span className="px-2 font-medium text-[15px]">Upload</span>
                 </button>
 
                 {!userContext?.user?.id ? (
@@ -128,7 +128,6 @@ const TopNav = () => {
                                             <BiUser size="20"/>
                                             <span className="pl-2 font-semibold text-sm">Profile</span>
                                         </button>
-
                                         <button
                                             onClick={async () => {
                                                 await userContext?.logout()

@@ -137,7 +137,7 @@ const CommentsHeader = ({ post, params }: CommentsHeaderCompTypes) => {
                 {isDeleteing ? (
                     <BiLoaderCircle className="animate-spin" size="25"/>
                 ) : (
-                    <button disabled={isDeleteing} onClick={() => deletePost()}>
+                    <button className='dark:text-white' disabled={isDeleteing} onClick={() => deletePost()}>
                         <BsTrash3 className="cursor-pointer" size="25"/>
                     </button>
                 )}
