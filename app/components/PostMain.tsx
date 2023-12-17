@@ -59,9 +59,9 @@ const PostMain = ({ post }: PostMainCompTypes) => {
             </div>
             <p className="text-[15px] pb-0.5 break-words md:max-w-[400px] max-w-[300px] dark:text-white">{post.text}</p>
             <p className="text-[14px] text-gray-500 dark:text-white pb-0.5">#longbi #longkhongmap #longbabe</p>
-            <p className="text-[14px] pb-0.5 flex items-center font-semibold">
+            <p className="text-[14px] pb-0.5 flex items-center font-semibold dark:text-white">
                 <ImMusic size="17"/>
-                <span className="px-1 dark:text-white">original sound - LONGBI</span>
+                <span className="px-1">original sound - LONGBI</span>
                 <AiFillHeart size="20"/>
             </p>
 

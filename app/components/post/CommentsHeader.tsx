@@ -152,7 +152,7 @@ const CommentsHeader = ({ post, params }: CommentsHeaderCompTypes) => {
           original sound - {post?.profile.name}
       </p>
 
-      <div className="flex items-center px-8 mt-8">
+      <div className="flex items-center px-8 mt-8 dark:text-white">
           <ClientOnly>
               <div className="pb-4 text-center flex items-center">
                   <button
