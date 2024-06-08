@@ -74,6 +74,7 @@ const SideNavMain = () => {
                   <p className="pt-4 px-2">TikTok for Good Advertise Developers Transparency TikTok Rewards TikTok Browse TikTok Embeds</p>
                   <p className="pt-4 px-2">Help Safety Terms Privacy Creator Portal Community Guidelines</p>
                   <p className="pt-4 px-2">© Copyright {new Date().getFullYear()} TikTok</p>
+              </div>
               <div className="pb-14"></div>
           </div>
       </div>
