@@ -23,12 +23,16 @@ const ThemeToggle = () => {
   }, [darkMode])
 
   return (
-    <div className='relative w-16 h-7 flex items-center dark:bg-gray-900 bg-teal-500 cursor-pointer rounded-full p-1'
+    <div
+      className='relative w-14 h-8 flex items-center dark:bg-blue-950 bg-yellow-200 cursor-pointer rounded-full p-1'
       onClick={() => setDarkMode(!darkMode)}
     >
-      <FaMoon className="text-white" size={18} />
-      <div className='absolute bg-white dark:bg-medium w-6 h-6 rounded-full shadow-md transform transition-transform duration-300' style={darkMode ? {left: "2px"} : {right: "2px"}}></div>
-      <BsSunFill className="ml-auto text-yellow-400" size={18} />
+      <div
+        className='absolute flex items-center justify-center bg-yellow-200 dark:bg-blue-950 w-6 h-6 rounded-full shadow-md transform transition-transform duration-300'
+        style={darkMode ? { left: '2px' } : { right: '2px' }}
+      >
+        {darkMode ? <FaMoon className="text-blue-950" size={20} /> : <BsSunFill className="text-yellow-400" size={20} />}
+      </div>
     </div>
   )
 }
