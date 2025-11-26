@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AiFillHeart } from 'react-icons/ai'
 import { ImMusic } from 'react-icons/im'
-import { PostMainCompTypes } from '../types'
-import Link from 'next/link'
-import PostMainLikes from './PostMainLikes'
 import useCreateBucketUrl from '../hooks/useCreateBucketUrl'
-import { useRouter } from 'next/navigation'
+import { PostMainCompTypes } from '../types'
+import PostMainLikes from './PostMainLikes'
 
 const PostMain = ({ post }: PostMainCompTypes) => {
   const router = useRouter()
@@ -43,7 +43,7 @@ const PostMain = ({ post }: PostMainCompTypes) => {
   }, [post.id])
 
   return (
-    <div ref={postMainRef} className="flex border-b py-6 px-4">
+    <div ref={postMainRef} className="flex border-b py-6 px-4 snap-start h-full">
       <div className="cursor-pointer">
         <img
           className="rounded-full max-h-[60px]"
@@ -53,7 +53,7 @@ const PostMain = ({ post }: PostMainCompTypes) => {
         />
       </div>
 
-      <div className="w-full px-2">
+      <div className="w-full px-2 flex flex-col h-full">
         <div className="flex items-center justify-between pb-0.5">
           <Link href={`/profile/${post.profile.user_id}`}>
             <a className="font-bold hover:underline cursor-pointer dark:text-white">
@@ -86,7 +86,7 @@ const PostMain = ({ post }: PostMainCompTypes) => {
         <div className="mt-2.5 flex">
           <div
             onClick={() => router.push(`/post/${post?.id}/${post?.profile?.user_id}`)}
-            className="relative min-h-[480px] max-h-[580px] max-w-[260px] flex items-center bg-black rounded-xl cursor-pointer"
+            className="relative min-h-[500px] max-h-[600px] max-w-[260px] flex items-center bg-black rounded-xl cursor-pointer"
           >
             <video
               ref={videoRef}

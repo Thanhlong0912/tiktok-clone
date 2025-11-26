@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect } from "react"
 import { usePostStore } from "@/app/stores/post"
+import { usePathname } from "next/navigation"
+import { useEffect } from "react"
 import ClientOnly from "./components/ClientOnly"
 import PostMain from "./components/PostMain"
 import MainLayout from "./layouts/MainLayout"
-import { usePathname } from "next/navigation"
 
 export default function Home() {
 
@@ -17,7 +17,7 @@ export default function Home() {
   return (
     <>
       <MainLayout>
-        <div className="mt-[45px] w-full max-w-[690px] ml-auto">
+        <div className="mt-[60px] w-full max-w-[690px] ml-auto h-[calc(100vh-60px)] overflow-y-scroll snap-y snap-mandatory scroll-smooth">
           <ClientOnly>
             {allPosts.map((post, index) => (
               <PostMain post={post} key={index} />
