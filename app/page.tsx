@@ -1,16 +1,12 @@
 "use client"
 
 import { usePostStore } from "@/app/stores/post"
-import { usePathname } from "next/navigation"
 import { useEffect } from "react"
 import ClientOnly from "./components/ClientOnly"
 import PostMain from "./components/PostMain"
 import MainLayout from "./layouts/MainLayout"
 
 export default function Home() {
-
-  const pathname = usePathname()
-
   let { allPosts, setAllPosts } = usePostStore();
   useEffect(() => { setAllPosts()}, [])
 

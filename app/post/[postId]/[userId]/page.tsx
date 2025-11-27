@@ -8,9 +8,8 @@ import { useCommentStore } from '@/app/stores/comment'
 import { useLikeStore } from '@/app/stores/like'
 import { usePostStore } from '@/app/stores/post'
 import { PostPageTypes } from '@/app/types'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import React, { useEffect } from 'react'
+import { useEffect } from 'react'
 import { AiOutlineClose } from "react-icons/ai"
 import { BiChevronDown, BiChevronUp } from "react-icons/bi"
 
@@ -51,12 +50,12 @@ const Post = ({ params }: PostPageTypes) => {
           className="lg:flex justify-between w-full h-screen bg-black overflow-auto"
       >
           <div className="lg:w-[calc(100%-540px)] h-full relative">
-              <Link
-                  href={`/profile/${params?.userId}`}
+              <button
+                  onClick={()=> {router.back()}}
                   className="absolute text-white z-20 m-5 rounded-full bg-gray-700 p-1.5 hover:bg-gray-800"
               >
                   <AiOutlineClose size="27"/>
-              </Link>
+              </button>
 
               <div >
                   <button
