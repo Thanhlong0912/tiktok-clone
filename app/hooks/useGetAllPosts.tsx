@@ -1,4 +1,4 @@
-import { database, Query } from "@/libs/AppWriteClient"
+import { database, Query } from "@/libs/AppWriteClient";
 import useGetProfileByUserId from "./useGetProfileByUserId";
 
 const useGetAllPosts = async () => {
@@ -6,7 +6,7 @@ const useGetAllPosts = async () => {
         const response = await database.listDocuments(
             String(process.env.NEXT_PUBLIC_DATABASE_ID),
             String(process.env.NEXT_PUBLIC_COLLECTION_ID_POST),
-            [ Query.orderDesc("$id") ]
+            [ Query.orderDesc("$id"), Query.limit(100) ]
         );
         const documents = response.documents;
 
