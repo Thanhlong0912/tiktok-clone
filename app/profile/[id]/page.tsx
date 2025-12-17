@@ -6,6 +6,9 @@ import { useUser } from "@/app/context/user"
 import useCreateBucketUrl from "@/app/hooks/useCreateBucketUrl"
 import useCreateFollow from "@/app/hooks/useCreateFollow"
 import useDeleteFollow from "@/app/hooks/useDeleteFollow"
+import useGetFollowers from "@/app/hooks/useGetFollowers"
+import useGetFollowing from "@/app/hooks/useGetFollowing"
+import useGetLikesByPostId from "@/app/hooks/useGetLikesByPostId"
 import useIsFollowing from "@/app/hooks/useIsFollowing"
 import MainLayout from "@/app/layouts/MainLayout"
 import { useGeneralStore } from "@/app/stores/general"
@@ -15,12 +18,47 @@ import { ProfilePageTypes, User } from "@/app/types"
 import { useCallback, useEffect, useState } from "react"
 import { BsPencil } from "react-icons/bs"
 
+
 const Profile = ({ params }: ProfilePageTypes) => {
     const contextUser = useUser()
     let { postsByUser, setPostsByUser } = usePostStore()
     let { setCurrentProfile, currentProfile } = useProfileStore()
     let { isEditProfileOpen, setIsEditProfileOpen } = useGeneralStore()
     const [followId, setFollowId] = useState<string | null>(null)
+    const [followersCount, setFollowersCount] = useState<number>(0)
+    const [followingCount, setFollowingCount] = useState<number>(0)
+    const [likesCount, setLikesCount] = useState<number>(0)
+
+    useEffect(() => {
+        const getStats = async () => {
+            if (!params?.id) return;
+            const followers = await useGetFollowers(params.id);
+            setFollowersCount(followers.length);
+            
+            const following = await useGetFollowing(params.id);
+            setFollowingCount(following.length);
+        }
+        getStats();
+    }, [params?.id, followId]) // Update stats when follow status changes (e.g. self follow/unfollow)
+
+    useEffect(() => {
+        const getLikes = async () => {
+             if (!postsByUser || postsByUser.length < 1) {
+                 setLikesCount(0);
+                 return;
+             }
+             let totalLikes = 0;
+             // We can run these in parallel
+             const promises = postsByUser.map(async (post) => {
+                 const likes = await useGetLikesByPostId(post.id);
+                 return likes.length;
+             });
+             const results = await Promise.all(promises);
+             totalLikes = results.reduce((acc, curr) => acc + curr, 0);
+             setLikesCount(totalLikes);
+        }
+        getLikes();
+    }, [postsByUser])
 
     useEffect(() => {
         const checkFollow = async () => {
@@ -106,12 +144,16 @@ const Profile = ({ params }: ProfilePageTypes) => {
 
             <div className="flex items-center pt-4">
                 <div className="mr-4">
-                    <span className="font-bold dark:text-white">10K</span>
+                    <span className="font-bold dark:text-white">{followingCount}</span>
                     <span className="text-gray-500 dark:text-white font-light text-[15px] pl-1.5">Following</span>
                 </div>
                 <div className="mr-4">
-                    <span className="font-bold dark:text-white">100K</span>
+                    <span className="font-bold dark:text-white">{followersCount}</span>
                     <span className="text-gray-500 dark:text-white font-light text-[15px] pl-1.5">Followers</span>
+                </div>
+                <div className="mr-4">
+                    <span className="font-bold dark:text-white">{likesCount}</span>
+                    <span className="text-gray-500 dark:text-white font-light text-[15px] pl-1.5">Likes</span>
                 </div>
             </div>
 
