@@ -1,27 +1,58 @@
 "use client"
 
-import PostUser from "@/app/components/profile/PostUser"
-import MainLayout from "@/app/layouts/MainLayout"
-import { BsPencil } from "react-icons/bs"
-import { useEffect } from "react"
-import { useUser } from "@/app/context/user"
 import ClientOnly from "@/app/components/ClientOnly"
-import { ProfilePageTypes, User } from "@/app/types"
+import PostUser from "@/app/components/profile/PostUser"
+import { useUser } from "@/app/context/user"
+import useCreateBucketUrl from "@/app/hooks/useCreateBucketUrl"
+import useCreateFollow from "@/app/hooks/useCreateFollow"
+import useDeleteFollow from "@/app/hooks/useDeleteFollow"
+import useIsFollowing from "@/app/hooks/useIsFollowing"
+import MainLayout from "@/app/layouts/MainLayout"
+import { useGeneralStore } from "@/app/stores/general"
 import { usePostStore } from "@/app/stores/post"
 import { useProfileStore } from "@/app/stores/profile"
-import { useGeneralStore } from "@/app/stores/general"
-import useCreateBucketUrl from "@/app/hooks/useCreateBucketUrl"
+import { ProfilePageTypes, User } from "@/app/types"
+import { useCallback, useEffect, useState } from "react"
+import { BsPencil } from "react-icons/bs"
 
 const Profile = ({ params }: ProfilePageTypes) => {
     const contextUser = useUser()
     let { postsByUser, setPostsByUser } = usePostStore()
     let { setCurrentProfile, currentProfile } = useProfileStore()
     let { isEditProfileOpen, setIsEditProfileOpen } = useGeneralStore()
+    const [followId, setFollowId] = useState<string | null>(null)
 
     useEffect(() => {
+        const checkFollow = async () => {
+            if (!contextUser?.user?.id || !params?.id || contextUser.user.id === params?.id) return;
+            const id = await useIsFollowing(contextUser.user.id, params.id);
+            setFollowId(id);
+        }
+        checkFollow();
         setCurrentProfile(params?.id)
         setPostsByUser(params?.id)
-    }, [])
+    }, [contextUser?.user?.id, params?.id])
+
+    const toggleFollow = useCallback(async () => {
+        if (!contextUser?.user?.id || !params?.id) return;
+        
+        if (followId) {
+            try {
+                await useDeleteFollow(followId);
+                setFollowId(null);
+            } catch (error) {
+                console.error(error);
+            }
+        } else {
+            try {
+                await useCreateFollow(contextUser.user.id, params.id);
+                 const id = await useIsFollowing(contextUser.user.id, params.id);
+                 setFollowId(id);
+            } catch (error) {
+                console.error(error);
+            }
+        }
+    }, [contextUser?.user?.id, params?.id, followId]);
 
   return (
     <>
@@ -60,8 +91,13 @@ const Profile = ({ params }: ProfilePageTypes) => {
                             <span>Edit profile</span>
                         </button>
                     ) : (
-                        <button className="flex item-center rounded-md py-1.5 px-8 mt-3 text-[15px] text-white font-semibold bg-[#F02C56]">
-                            Follow
+                        <button 
+                            onClick={toggleFollow}
+                            className={`flex item-center rounded-md py-1.5 px-8 mt-3 text-[15px] text-white font-semibold ${
+                                followId ? 'bg-gray-400' : 'bg-[#F02C56]'
+                            }`}
+                        >
+                            {followId ? 'Following' : 'Follow'}
                         </button>
                     )}
                 </div>

@@ -3,19 +3,63 @@ import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AiFillHeart } from 'react-icons/ai'
 import { ImMusic } from 'react-icons/im'
+import { useUser } from '../context/user'
 import useCreateBucketUrl from '../hooks/useCreateBucketUrl'
+import useCreateFollow from '../hooks/useCreateFollow'
+import useDeleteFollow from '../hooks/useDeleteFollow'
+import useIsFollowing from '../hooks/useIsFollowing'
 import { PostMainCompTypes } from '../types'
 import PostMainLikes from './PostMainLikes'
 
 const PostMain = ({ post }: PostMainCompTypes) => {
+  const { user } = useUser() || {};
   const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
   const postMainRef = useRef<HTMLDivElement>(null)
-  const [isFollow, setIsFollow] = useState(false)
+  
+  // State to hold the follow document ID if following, or null if not.
+  const [followId, setFollowId] = useState<string | null>(null)
 
-  const handleClick = useCallback(() => {
-    setIsFollow(prev => !prev)
-  }, [])
+  useEffect(() => {
+    const checkFollow = async () => {
+      if (!user?.id || !post.profile.user_id || user.id === post.profile.user_id) return;
+      const id = await useIsFollowing(user.id, post.profile.user_id);
+      setFollowId(id);
+    }
+    checkFollow();
+  }, [user?.id, post.profile.user_id]);
+
+  const toggleFollow = useCallback(async () => {
+    if (!user?.id) {
+        // Redirect to login if not logged in? Or just return.
+        // For now, let's just do nothing or maybe alert.
+        console.log("Login to follow");
+        return;
+    }
+    
+    if (followId) {
+        // Unfollow
+        try {
+            await useDeleteFollow(followId);
+            setFollowId(null);
+        } catch (error) {
+            console.error(error);
+        }
+    } else {
+        // Follow
+        try {
+            await useCreateFollow(user.id, post.profile.user_id);
+            // Re-check to get the ID, or we could just set a temporary true state.
+            // Better to re-fetch or assume success if we want the ID for future deletion.
+            // But useCreateFollow doesn't return ID. Let's fix useCreateFollow if we need IT.
+            // Actually usually we just re-check.
+             const id = await useIsFollowing(user.id, post.profile.user_id);
+             setFollowId(id);
+        } catch (error) {
+            console.error(error);
+        }
+    }
+  }, [user?.id, post.profile.user_id, followId]);
 
   useEffect(() => {
     const postMainElement = postMainRef.current
@@ -60,16 +104,18 @@ const PostMain = ({ post }: PostMainCompTypes) => {
               {post.profile.name}
             </a>
           </Link>
-          <button
-            onClick={handleClick}
-            className={`flex items-center rounded-md py-1.5 px-8 mt-3 text-[15px] font-semibold ${
-              isFollow
-                ? 'bg-gray-400 dark:bg-gray-500 text-white'
-                : 'bg-rose-500 text-white'
-            }`}
-          >
-            {isFollow ? 'Following' : 'Follow'}
-          </button>
+          {user?.id !== post.profile.user_id && (
+            <button
+              onClick={toggleFollow}
+              className={`flex items-center rounded-md py-1.5 px-8 mt-3 text-[15px] font-semibold ${
+                followId
+                  ? 'border border-gray-300 text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 bg-white dark:bg-black'
+                  : 'bg-rose-500 text-white hover:bg-rose-600'
+              }`}
+            >
+              {followId ? 'Following' : 'Follow'}
+            </button>
+          )}
         </div>
         <p className="text-[15px] pb-0.5 break-words md:max-w-[400px] max-w-[300px] dark:text-white">
           {post.text}

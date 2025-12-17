@@ -40,6 +40,12 @@ export interface Like {
   post_id: string;
 }
 
+export interface Follow {
+  id: string;
+  user_id: string;
+  to_user_id: string;
+}
+
 export interface Post {
   id: string;
   user_id: string;
