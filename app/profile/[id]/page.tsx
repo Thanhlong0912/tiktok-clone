@@ -8,13 +8,14 @@ import useCreateFollow from "@/app/hooks/useCreateFollow"
 import useDeleteFollow from "@/app/hooks/useDeleteFollow"
 import useGetFollowers from "@/app/hooks/useGetFollowers"
 import useGetFollowing from "@/app/hooks/useGetFollowing"
+import useGetLikedPosts from "@/app/hooks/useGetLikedPosts"
 import useGetLikesByPostId from "@/app/hooks/useGetLikesByPostId"
 import useIsFollowing from "@/app/hooks/useIsFollowing"
 import MainLayout from "@/app/layouts/MainLayout"
 import { useGeneralStore } from "@/app/stores/general"
 import { usePostStore } from "@/app/stores/post"
 import { useProfileStore } from "@/app/stores/profile"
-import { ProfilePageTypes, User } from "@/app/types"
+import { PostWithProfile, ProfilePageTypes, User } from "@/app/types"
 import { useCallback, useEffect, useState } from "react"
 import { BsPencil } from "react-icons/bs"
 
@@ -28,6 +29,9 @@ const Profile = ({ params }: ProfilePageTypes) => {
     const [followersCount, setFollowersCount] = useState<number>(0)
     const [followingCount, setFollowingCount] = useState<number>(0)
     const [likesCount, setLikesCount] = useState<number>(0)
+    const [showLiked, setShowLiked] = useState<boolean>(false)
+    const [likedPosts, setLikedPosts] = useState<PostWithProfile[]>([])
+    const [isLoadingLiked, setIsLoadingLiked] = useState<boolean>(false)
 
     useEffect(() => {
         const getStats = async () => {
@@ -70,6 +74,18 @@ const Profile = ({ params }: ProfilePageTypes) => {
         setCurrentProfile(params?.id)
         setPostsByUser(params?.id)
     }, [contextUser?.user?.id, params?.id])
+
+    useEffect(() => {
+        const fetchLikedPosts = async () => {
+             if (showLiked && params?.id) {
+                 setIsLoadingLiked(true)
+                 const posts = await useGetLikedPosts(params.id)
+                 setLikedPosts(posts)
+                 setIsLoadingLiked(false)
+             }
+        }
+        fetchLikedPosts()
+    }, [showLiked, params?.id])
 
     const toggleFollow = useCallback(async () => {
         if (!contextUser?.user?.id || !params?.id) return;
@@ -164,15 +180,43 @@ const Profile = ({ params }: ProfilePageTypes) => {
             </ClientOnly>
 
             <ul className="w-full flex items-center pt-4 border-b">
-                <li className="w-60 text-center py-2 text-[17px] font-semibold border-b-2 border-b-black dark:text-white dark:border-b-white">Videos</li>
-                <li className="w-60 text-gray-500 dark:text-white text-center py-2 text-[17px] font-semibold">Liked</li>
+                <li 
+                    onClick={() => setShowLiked(false)} 
+                    className={`w-60 text-center py-2 text-[17px] font-semibold cursor-pointer ${!showLiked ? 'border-b-2 border-b-black dark:border-b-white dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}
+                >
+                    Videos
+                </li>
+                <li 
+                    onClick={() => setShowLiked(true)}
+                    className={`w-60 text-center py-2 text-[17px] font-semibold cursor-pointer ${showLiked ? 'border-b-2 border-b-black dark:border-b-white dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}
+                >
+                    Liked
+                </li>
             </ul>
 
             <ClientOnly>
                 <div className="mt-4 grid 2xl:grid-cols-6 xl:grid-cols-5 lg:grid-cols-4 md:grid-cols-3 grid-cols-2 gap-3">
-                    {postsByUser?.map((post, index) => (
-                        <PostUser key={index} post={post} />
-                    ))}
+                    {showLiked ? (
+                         isLoadingLiked ? (
+                             <div className="flex justify-center items-center h-20 col-span-full">
+                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black dark:border-white"></div>
+                             </div>
+                         ) : likedPosts.length > 0 ? (
+                             likedPosts.map((post, index) => (
+                                <PostUser key={index} post={post} />
+                             ))
+                         ) : (
+                             <div className="text-gray-500 font-light text-[15px]">No liked videos yet</div>
+                         )
+                    ) : (
+                        postsByUser?.length > 0 ? (
+                            postsByUser.map((post, index) => (
+                                <PostUser key={index} post={post} />
+                            ))
+                        ) : (
+                            <div className="text-gray-500 font-light text-[15px]">No videos yet</div>
+                        )
+                    )}
                 </div>
             </ClientOnly>
 
