@@ -2,13 +2,13 @@
 
 import { useRouter } from 'next/navigation'
 import React, { useEffect, useState } from 'react'
-import { UploadError } from '../types'
-import UploadLayout from '../layouts/UploadLayout'
+import { AiOutlineCheckCircle } from "react-icons/ai"
 import { BiLoaderCircle, BiSolidCloudUpload } from "react-icons/bi"
-import { AiOutlineCheckCircle } from "react-icons/ai";
 import { PiKnifeLight } from 'react-icons/pi'
 import { useUser } from '../context/user'
 import useCreatePost from '../hooks/useCreatePost'
+import UploadLayout from '../layouts/UploadLayout'
+import { UploadError } from '../types'
 
 const Upload = () => {
     const contextUser = useUser()
@@ -181,7 +181,7 @@ const Upload = () => {
                             <div className="absolute -bottom-12 flex items-center justify-between z-50 rounded-xl border w-full p-2 border-gray-300">
                                 <div className="flex items-center truncate">
                                     <AiOutlineCheckCircle size="16" className="min-w-[16px]"/>
-                                    <p className="text-[11px] pl-1 truncate text-ellipsis">{File.name}</p>
+                                    <p className="text-[11px] pl-1 truncate text-ellipsis">{file?.name}</p>
                                 </div>
                                 <button onClick={() => clearVideo()} className="text-[11px] ml-2 font-semibold">
                                     Change

@@ -84,7 +84,7 @@ const PostMain = ({ post }: PostMainCompTypes) => {
         observer.unobserve(postMainElement)
       }
     }
-  }, [post.id])
+  }, [post.id]);
 
   return (
     <div ref={postMainRef} className="flex border-b py-6 px-4 snap-start h-full">
@@ -99,10 +99,11 @@ const PostMain = ({ post }: PostMainCompTypes) => {
 
       <div className="w-full px-2 flex flex-col h-full">
         <div className="flex items-center justify-between pb-0.5">
-          <Link href={`/profile/${post.profile.user_id}`}>
-            <a className="font-bold hover:underline cursor-pointer dark:text-white">
-              {post.profile.name}
-            </a>
+          <Link 
+            href={`/profile/${post.profile.user_id}`}
+            className="font-bold hover:underline cursor-pointer dark:text-white"
+          >
+            {post.profile.name}
           </Link>
           {user?.id !== post.profile.user_id && (
             <button
@@ -120,12 +121,12 @@ const PostMain = ({ post }: PostMainCompTypes) => {
         <p className="text-[15px] pb-0.5 break-words md:max-w-[400px] max-w-[300px] dark:text-white">
           {post.text}
         </p>
-        <p className="text-[14px] text-gray-500 dark:text-white pb-0.5">
+        <p className="text-[14px] text-gray-500 dark:text-gray-300 pb-0.5">
           #longbi #longkhongmap #longbabe
         </p>
         <p className="text-[14px] pb-0.5 flex items-center font-semibold dark:text-white">
           <ImMusic size="17" />
-          <span className="px-1">original sound - LONGBI</span>
+          <span className="px-1 text-[13px] truncate">original sound - {post.profile.name}</span>
           <AiFillHeart size="20" />
         </p>
 

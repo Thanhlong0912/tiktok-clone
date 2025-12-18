@@ -16,3 +16,11 @@
   border-radius: 10px;
   border: 2px solid #F8DAD0;
 }
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

@@ -26,22 +26,22 @@ const Post = ({ params }: PostPageTypes) => {
         setCommentsByPost(params.postId)
         setLikesByPost(params.postId)
         setPostsByUser(params.userId)
-    }, [])
+    }, [params.postId, params.userId])
 
     const loopThroughPostsUp = () => {
-        postsByUser.forEach(post => {
-            if (post.id > params.postId) {
-                router.push(`/post/${post.id}/${params.userId}`)
-            }
-        });
+        const currentIndex = postsByUser.findIndex(post => post.id === params.postId);
+        if (currentIndex > 0) {
+            const nextPost = postsByUser[currentIndex - 1];
+            router.push(`/post/${nextPost.id}/${params.userId}`)
+        }
     }
 
     const loopThroughPostsDown = () => {
-        postsByUser.forEach(post => {
-            if (post.id < params.postId) {
-                router.push(`/post/${post.id}/${params.userId}`)
-            }
-        });
+        const currentIndex = postsByUser.findIndex(post => post.id === params.postId);
+        if (currentIndex !== -1 && currentIndex < postsByUser.length - 1) {
+            const prevPost = postsByUser[currentIndex + 1];
+            router.push(`/post/${prevPost.id}/${params.userId}`)
+        }
     }
   return (
     <>
@@ -51,26 +51,30 @@ const Post = ({ params }: PostPageTypes) => {
       >
           <div className="lg:w-[calc(100%-540px)] h-full relative">
               <button
-                  onClick={()=> {router.back()}}
+                  onClick={()=> {router.push(`/profile/${params.userId}`)}}
                   className="absolute text-white z-20 m-5 rounded-full bg-gray-700 p-1.5 hover:bg-gray-800"
               >
                   <AiOutlineClose size="27"/>
               </button>
 
               <div >
-                  <button
-                      onClick={() => loopThroughPostsUp()}
-                      className="absolute z-20 right-4 top-[45%] flex items-center justify-center rounded-full bg-gray-700 p-1.5 hover:bg-gray-800"
-                  >
-                      <BiChevronUp size="30" color="#FFFFFF"/>
-                  </button>
+                  {postsByUser.findIndex(post => post.id === params.postId) > 0 && (
+                      <button
+                          onClick={() => loopThroughPostsUp()}
+                          className="absolute z-20 right-4 top-[45%] flex items-center justify-center rounded-full bg-gray-700 p-1.5 hover:bg-gray-800"
+                      >
+                          <BiChevronUp size="30" color="#FFFFFF"/>
+                      </button>
+                  )}
 
-                  <button
-                      onClick={() => loopThroughPostsDown()}
-                      className="absolute z-20 right-4 top-[55%] flex items-center justify-center rounded-full bg-gray-700 p-1.5 hover:bg-gray-800"
-                  >
-                      <BiChevronDown size="30" color="#FFFFFF"/>
-                  </button>
+                  {postsByUser.findIndex(post => post.id === params.postId) < postsByUser.length - 1 && (
+                      <button
+                          onClick={() => loopThroughPostsDown()}
+                          className="absolute z-20 right-4 top-[55%] flex items-center justify-center rounded-full bg-gray-700 p-1.5 hover:bg-gray-800"
+                      >
+                          <BiChevronDown size="30" color="#FFFFFF"/>
+                      </button>
+                  )}
               </div>
 
               <img
@@ -80,23 +84,21 @@ const Post = ({ params }: PostPageTypes) => {
               />
 
               <ClientOnly>
-                  {postById?.video_url ? (
-                      <video
-                      className="fixed object-cover w-full my-auto z-[0] h-screen"
-                      src={useCreateBucketUrl(postById?.video_url)}
-                    />
-                  ) : null}
-
-                  <div className="bg-black bg-opacity-70 lg:min-w-[480px] z-10 relative">
+                  <div className="bg-black lg:min-w-[480px] z-10 relative">
                     {postById?.video_url ? (
                         <video
+                            key={postById.video_url}
                             autoPlay
                             controls
                             loop
                             className="h-screen mx-auto"
                             src={useCreateBucketUrl(postById.video_url)}
                         />
-                    ) : null}
+                    ) : (
+                        <div className="h-screen bg-black flex items-center justify-center">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+                        </div>
+                    )}
                   </div>
               </ClientOnly>
 

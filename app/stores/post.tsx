@@ -1,9 +1,9 @@
 import { create } from 'zustand';
-import { persist, devtools, createJSONStorage } from 'zustand/middleware';
-import { Post, PostWithProfile } from '../types';
+import { createJSONStorage, devtools, persist } from 'zustand/middleware';
 import useGetAllPosts from '../hooks/useGetAllPosts';
-import useGetPostsByUser from '../hooks/useGetPostsByUserId';
 import useGetPostById from '../hooks/useGetPostById';
+import useGetPostsByUser from '../hooks/useGetPostsByUserId';
+import { Post, PostWithProfile } from '../types';
 
 interface PostStore {
     allPosts: PostWithProfile[];
@@ -31,6 +31,15 @@ export const usePostStore = create<PostStore>()(
                     set({ postsByUser: result });
                 },
                 setPostById: async (postId: string) => {
+                    // Try to find locally first for immediate UI update
+                    const { allPosts, postsByUser } = usePostStore.getState();
+                    let localPost = allPosts.find((p) => p.id === postId) as PostWithProfile || 
+                                    postsByUser.find((p) => Number(p.id) === Number(postId)) as unknown as PostWithProfile;
+                    
+                    if (localPost) {
+                        set({ postById: localPost });
+                    }
+
                     const result = await useGetPostById(postId)
                     set({ postById: result })
                 },

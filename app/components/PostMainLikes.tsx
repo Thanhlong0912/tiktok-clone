@@ -1,16 +1,16 @@
-import React, { useEffect, useState } from 'react'
-import { BiLoaderCircle } from "react-icons/bi"
-import { AiFillHeart } from "react-icons/ai"
-import { FaShare, FaCommentDots } from "react-icons/fa"
-import { Comment, Like, PostMainLikesCompTypes } from "../types"
 import { useRouter } from 'next/navigation'
-import useIsLiked from '../hooks/useIsLiked'
-import useDeleteLike from '../hooks/useDeleteLike'
-import useCreateLike from '../hooks/useCreateLike'
-import useGetLikesByPostId from '../hooks/useGetLikesByPostId'
-import useGetCommentsByPostId from '../hooks/useGetCommentsByPostId'
+import { useEffect, useState } from 'react'
+import { AiFillHeart } from "react-icons/ai"
+import { BiLoaderCircle } from "react-icons/bi"
+import { FaCommentDots, FaShare } from "react-icons/fa"
 import { useUser } from '../context/user'
+import useCreateLike from '../hooks/useCreateLike'
+import useDeleteLike from '../hooks/useDeleteLike'
+import useGetCommentsByPostId from '../hooks/useGetCommentsByPostId'
+import useGetLikesByPostId from '../hooks/useGetLikesByPostId'
+import useIsLiked from '../hooks/useIsLiked'
 import { useGeneralStore } from '../stores/general'
+import { Comment, Like, PostMainLikesCompTypes } from "../types"
 
 const PostMainLikes = ({ post }: PostMainLikesCompTypes) => {
 
@@ -118,11 +118,17 @@ const PostMainLikes = ({ post }: PostMainLikesCompTypes) => {
                     <span className="text-xs text-gray-800 dark:text-white font-semibold">{comments?.length}</span>
                 </button>
 
-                <button className="text-center">
+                <button 
+                  className="text-center"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/post/${post?.id}/${post?.profile?.user_id}`)
+                    alert("Copied to clipboard!")
+                  }}
+                >
                     <div className="rounded-full bg-gray-200 dark:bg-medium p-2 cursor-pointer">
                         <FaShare size="25"/>
                     </div>
-                    <span className="text-xs text-gray-800 dark:text-white font-semibold">1000</span>
+                    <span className="text-xs text-gray-800 dark:text-white font-semibold">Share</span>
                 </button>
             </div>
         </div>
