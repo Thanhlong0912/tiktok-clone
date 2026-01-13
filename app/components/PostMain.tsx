@@ -133,7 +133,7 @@ const PostMain = ({ post }: PostMainCompTypes) => {
         <div className="mt-2.5 flex flex-1">
           <div
             onClick={() => router.push(`/post/${post?.id}/${post?.profile?.user_id}`)}
-            className="relative min-h-[500px] max-h-[600px] max-w-[282px] flex items-center bg-black rounded-xl cursor-pointer"
+            className="relative min-h-[525px] max-h-[625px] max-w-[295px] flex items-center bg-black rounded-xl cursor-pointer"
           >
             <video
               ref={videoRef}
