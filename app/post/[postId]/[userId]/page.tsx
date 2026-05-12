@@ -8,6 +8,8 @@ import { useCommentStore } from '@/app/stores/comment'
 import { useLikeStore } from '@/app/stores/like'
 import { usePostStore } from '@/app/stores/post'
 import { PostPageTypes } from '@/app/types'
+import { pauseOtherVideos } from '@/app/utils/videoPlayback'
+import { getVideoSoundEnabled, setVideoSoundEnabled, subscribeToVideoSoundPreference } from '@/app/utils/videoSoundPreference'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AiOutlineClose } from 'react-icons/ai'
@@ -21,7 +23,10 @@ const Post = ({ params }: PostPageTypes) => {
   const [isMobileSheetExpanded, setIsMobileSheetExpanded] = useState<boolean>(false)
   const [isSheetDragging, setIsSheetDragging] = useState<boolean>(false)
   const [sheetDragOffsetY, setSheetDragOffsetY] = useState<number>(0)
+  const [isSoundEnabled, setIsSoundEnabledState] = useState<boolean>(false)
   const sheetDragStartYRef = useRef<number | null>(null)
+  const mobileVideoRef = useRef<HTMLVideoElement | null>(null)
+  const desktopVideoRef = useRef<HTMLVideoElement | null>(null)
 
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -45,11 +50,37 @@ const Post = ({ params }: PostPageTypes) => {
     [params.postId, postsByUser]
   )
 
+  const pauseCurrentVideos = () => {
+    mobileVideoRef.current?.pause()
+    desktopVideoRef.current?.pause()
+  }
+
+  const syncSoundState = (enabled: boolean) => {
+    setIsSoundEnabledState(enabled)
+
+    if (mobileVideoRef.current) {
+      mobileVideoRef.current.muted = !enabled
+    }
+
+    if (desktopVideoRef.current) {
+      desktopVideoRef.current.muted = !enabled
+    }
+  }
+
+  const enableSound = () => {
+    setVideoSoundEnabled(true)
+    syncSoundState(true)
+    const isDesktopViewport = typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches
+    const activeVideo = isDesktopViewport ? desktopVideoRef.current : mobileVideoRef.current
+    activeVideo?.play().catch(() => null)
+  }
+
   const loopThroughPostsUp = () => {
     if (currentIndex <= 0) {
       return
     }
 
+    pauseCurrentVideos()
     const nextPost = postsByUser[currentIndex - 1]
     router.push(`/post/${nextPost.id}/${params.userId}`)
   }
@@ -59,9 +90,24 @@ const Post = ({ params }: PostPageTypes) => {
       return
     }
 
+    pauseCurrentVideos()
     const prevPost = postsByUser[currentIndex + 1]
     router.push(`/post/${prevPost.id}/${params.userId}`)
   }
+
+  useEffect(() => {
+    syncSoundState(getVideoSoundEnabled())
+
+    return subscribeToVideoSoundPreference((enabled) => {
+      syncSoundState(enabled)
+    })
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      pauseCurrentVideos()
+    }
+  }, [])
 
   const onSheetDragStart = (clientY: number) => {
     sheetDragStartYRef.current = clientY
@@ -102,10 +148,13 @@ const Post = ({ params }: PostPageTypes) => {
             <div className="h-full w-full bg-black">
               {postById?.video_url ? (
                 <video
+                  ref={mobileVideoRef}
                   key={postById.video_url}
                   autoPlay
                   playsInline
                   loop
+                  muted={!isSoundEnabled}
+                  onPlay={() => pauseOtherVideos(mobileVideoRef.current)}
                   className="h-full w-full object-cover"
                   src={useCreateBucketUrl(postById.video_url)}
                 />
@@ -116,6 +165,15 @@ const Post = ({ params }: PostPageTypes) => {
               )}
             </div>
           </ClientOnly>
+
+          {!isSoundEnabled ? (
+            <button
+              onClick={() => enableSound()}
+              className="absolute right-4 top-[calc(env(safe-area-inset-top)+12px)] z-30 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
+            >
+              Tap for sound
+            </button>
+          ) : null}
 
           <button
             onClick={() => {
@@ -252,14 +310,27 @@ const Post = ({ params }: PostPageTypes) => {
             <ClientOnly>
               <div className="bg-black lg:min-w-[480px] z-10 relative h-full">
                 {postById?.video_url ? (
-                  <video
-                    key={postById.video_url}
-                    autoPlay
-                    controls
-                    loop
-                    className="h-full mx-auto object-contain"
-                    src={useCreateBucketUrl(postById.video_url)}
-                  />
+                  <>
+                    <video
+                      ref={desktopVideoRef}
+                      key={postById.video_url}
+                      autoPlay
+                      controls
+                      loop
+                      muted={!isSoundEnabled}
+                      onPlay={() => pauseOtherVideos(desktopVideoRef.current)}
+                      className="h-full mx-auto object-contain"
+                      src={useCreateBucketUrl(postById.video_url)}
+                    />
+                    {!isSoundEnabled ? (
+                      <button
+                        onClick={() => enableSound()}
+                        className="absolute left-5 top-16 z-30 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
+                      >
+                        Click for sound
+                      </button>
+                    ) : null}
+                  </>
                 ) : (
                   <div className="h-full bg-black flex items-center justify-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white" />

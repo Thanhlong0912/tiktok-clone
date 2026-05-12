@@ -6,16 +6,37 @@ import { useEffect } from "react"
 import Link from "next/link"
 import { PostUserCompTypes } from "@/app/types"
 import useCreateBucketUrl from '@/app/hooks/useCreateBucketUrl'
+import { pauseOtherVideos } from '@/app/utils/videoPlayback'
 
 const PostUser = ({ post }: PostUserCompTypes) => {
 
   useEffect(() => {
     const video = document.getElementById(`video${post?.id}`) as HTMLVideoElement
 
-    setTimeout(() => {
-        video.addEventListener('mouseenter', () => { video.play() })
-        video.addEventListener('mouseleave', () => { video.pause() })
+    if (!video) {
+      return
+    }
+
+    const handleMouseEnter = () => {
+      pauseOtherVideos(video)
+      video.play().catch(() => null)
+    }
+
+    const handleMouseLeave = () => {
+      video.pause()
+    }
+
+    const timer = setTimeout(() => {
+      video.addEventListener('mouseenter', handleMouseEnter)
+      video.addEventListener('mouseleave', handleMouseLeave)
     }, 50)
+
+    return () => {
+      clearTimeout(timer)
+      video.removeEventListener('mouseenter', handleMouseEnter)
+      video.removeEventListener('mouseleave', handleMouseLeave)
+      video.pause()
+    }
 
   }, [])
 
@@ -31,6 +52,7 @@ const PostUser = ({ post }: PostUserCompTypes) => {
                   <video
                       id={`video${post.id}`}
                       loop
+                      muted
                       className="aspect-[3/4] object-cover rounded-md"
                       src={useCreateBucketUrl(post.video_url)}
                   />

@@ -18,6 +18,8 @@ import useGetLikesByPostId from '../hooks/useGetLikesByPostId'
 import useIsFollowing from '../hooks/useIsFollowing'
 import { useGeneralStore } from '../stores/general'
 import { CommentWithProfile, Like, PostMainCompTypes } from '../types'
+import { pauseOtherVideos } from '../utils/videoPlayback'
+import { getVideoSoundEnabled, setVideoSoundEnabled, subscribeToVideoSoundPreference } from '../utils/videoSoundPreference'
 import PostMainLikes from './PostMainLikes'
 
 const followStateByPair = new Map<string, string | null>()
@@ -44,6 +46,7 @@ const PostMain = ({ post }: PostMainCompTypes) => {
   const router = useRouter()
 
   const videoRef = useRef<HTMLVideoElement>(null)
+  const desktopVideoRef = useRef<HTMLVideoElement>(null)
   const postMainRef = useRef<HTMLDivElement>(null)
   const tapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastTapRef = useRef<number>(0)
@@ -64,6 +67,7 @@ const PostMain = ({ post }: PostMainCompTypes) => {
   const [isSubmittingComment, setIsSubmittingComment] = useState<boolean>(false)
   const [isShareSheetOpen, setIsShareSheetOpen] = useState<boolean>(false)
   const [videoPreloadMode, setVideoPreloadMode] = useState<'metadata' | 'auto'>('metadata')
+  const [isSoundEnabled, setIsSoundEnabledState] = useState<boolean>(false)
 
   const applyEngagementSnapshot = useCallback((likes: Like[], comments: CommentWithProfile[]) => {
     setLikesCount(likes.length)
@@ -156,10 +160,31 @@ const PostMain = ({ post }: PostMainCompTypes) => {
 
     const observer = new IntersectionObserver(
       (entries) => {
+        const isDesktopViewport = typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+        const activeVideo = isDesktopViewport ? desktopVideoRef.current : videoRef.current
+
         if (entries[0].isIntersecting) {
-          videoRef.current?.play().then(() => setIsVideoPaused(false)).catch(() => setIsVideoPaused(true))
+          if (!activeVideo) {
+            return
+          }
+
+          pauseOtherVideos(activeVideo)
+          activeVideo.muted = !isSoundEnabled
+          activeVideo
+            .play()
+            .then(() => {
+              if (!isDesktopViewport) {
+                setIsVideoPaused(false)
+              }
+            })
+            .catch(() => {
+              if (!isDesktopViewport) {
+                setIsVideoPaused(true)
+              }
+            })
         } else {
           videoRef.current?.pause()
+          desktopVideoRef.current?.pause()
           setIsVideoPaused(true)
         }
       },
@@ -179,7 +204,7 @@ const PostMain = ({ post }: PostMainCompTypes) => {
         observer.unobserve(postMainElement)
       }
     }
-  }, [post.id])
+  }, [isSoundEnabled, post.id])
 
   useEffect(() => {
     const postMainElement = postMainRef.current
@@ -244,6 +269,31 @@ const PostMain = ({ post }: PostMainCompTypes) => {
     video.pause()
     setIsVideoPaused(true)
   }, [])
+
+  const handleDesktopVideoPlay = useCallback(() => {
+    pauseOtherVideos(desktopVideoRef.current)
+  }, [])
+
+  const syncSoundState = useCallback((enabled: boolean) => {
+    setIsSoundEnabledState(enabled)
+
+    if (videoRef.current) {
+      videoRef.current.muted = !enabled
+    }
+
+    if (desktopVideoRef.current) {
+      desktopVideoRef.current.muted = !enabled
+    }
+  }, [])
+
+  const enableSound = useCallback(() => {
+    setVideoSoundEnabled(true)
+    syncSoundState(true)
+
+    const isDesktopViewport = typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+    const activeVideo = isDesktopViewport ? desktopVideoRef.current : videoRef.current
+    activeVideo?.play().catch(() => null)
+  }, [syncSoundState])
 
   const likePost = useCallback(async () => {
     if (!user?.id || isLikeLoading || userLiked) {
@@ -401,6 +451,21 @@ const PostMain = ({ post }: PostMainCompTypes) => {
     }
   }, [applyEngagementSnapshot, commentInput, isSubmittingComment, post.id, setIsLoginOpen, user?.id])
 
+  useEffect(() => {
+    syncSoundState(getVideoSoundEnabled())
+
+    return subscribeToVideoSoundPreference((enabled) => {
+      syncSoundState(enabled)
+    })
+  }, [syncSoundState])
+
+  useEffect(() => {
+    return () => {
+      videoRef.current?.pause()
+      desktopVideoRef.current?.pause()
+    }
+  }, [])
+
   return (
     <div ref={postMainRef} className="snap-start h-[100dvh] md:h-auto md:snap-none">
       <div className="relative h-full w-full overflow-hidden bg-black md:hidden">
@@ -414,6 +479,7 @@ const PostMain = ({ post }: PostMainCompTypes) => {
             id={`video-${post.id}`}
             loop
             playsInline
+            muted={!isSoundEnabled}
             preload={videoPreloadMode}
             className="h-full w-full object-cover"
             src={useCreateBucketUrl(post.video_url)}
@@ -431,6 +497,19 @@ const PostMain = ({ post }: PostMainCompTypes) => {
             </span>
           ) : null}
         </button>
+
+        {!isSoundEnabled ? (
+          <button
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              enableSound()
+            }}
+            className="absolute left-4 top-[calc(env(safe-area-inset-top)+16px)] z-30 rounded-full bg-black/55 px-3 py-1.5 text-xs font-semibold text-white"
+          >
+            Tap for sound
+          </button>
+        ) : null}
 
         <div className="absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+74px)] z-20 px-4 text-white">
           <div className="mb-2 flex items-center gap-2">
@@ -651,13 +730,28 @@ const PostMain = ({ post }: PostMainCompTypes) => {
               className="relative flex max-h-[625px] min-h-[525px] max-w-[295px] cursor-pointer items-center rounded-xl bg-black"
             >
               <video
+                ref={desktopVideoRef}
                 id={`video-desktop-${post.id}`}
                 loop
                 controls
+                muted={!isSoundEnabled}
+                onPlay={handleDesktopVideoPlay}
                 preload={videoPreloadMode}
                 className="mx-auto h-full rounded-xl object-cover"
                 src={useCreateBucketUrl(post.video_url)}
               />
+              {!isSoundEnabled ? (
+                <button
+                  onClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    enableSound()
+                  }}
+                  className="absolute left-3 top-3 z-30 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
+                >
+                  Click for sound
+                </button>
+              ) : null}
               <img
                 className="absolute bottom-10 right-2"
                 width="90"
