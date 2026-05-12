@@ -105,10 +105,13 @@ export interface UploadError {
 export interface CommentsHeaderCompTypes {
   params: { userId: string; postId: string; };
   post: PostWithProfile
+  isMobileDetail?: boolean;
 }
 
 export interface CommentsCompTypes {
   params: { userId: string; postId: string; };
+  isMobileDetail?: boolean;
+  autoFocusInput?: boolean;
 }
 
 export interface PostPageTypes {
@@ -134,6 +137,7 @@ export interface PostMainCompTypes {
 
 export interface PostMainLikesCompTypes {
   post: PostWithProfile
+  onCommentClick?: () => void;
 }
 
 export interface TextInputCompTypes {

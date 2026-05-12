@@ -24,3 +24,22 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+@keyframes heart-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.35);
+  }
+  30% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.15);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.35);
+  }
+}
+
+.heart-pop {
+  animation: heart-pop 0.52s ease-out forwards;
+}

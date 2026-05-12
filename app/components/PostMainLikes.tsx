@@ -12,7 +12,7 @@ import useIsLiked from '../hooks/useIsLiked'
 import { useGeneralStore } from '../stores/general'
 import { Comment, Like, PostMainLikesCompTypes } from "../types"
 
-const PostMainLikes = ({ post }: PostMainLikesCompTypes) => {
+const PostMainLikes = ({ post, onCommentClick }: PostMainLikesCompTypes) => {
 
     let { setIsLoginOpen } = useGeneralStore();
 
@@ -109,7 +109,13 @@ const PostMainLikes = ({ post }: PostMainLikesCompTypes) => {
                 </div>
 
                 <button
-                    onClick={() => router.push(`/post/${post?.id}/${post?.profile?.user_id}`)}
+                    onClick={() => {
+                        if (onCommentClick) {
+                            onCommentClick()
+                            return
+                        }
+                        router.push(`/post/${post?.id}/${post?.profile?.user_id}?comments=1`)
+                    }}
                     className="pb-4 text-center"
                 >
                     <div className="rounded-full bg-gray-200 dark:bg-medium p-2 cursor-pointer">

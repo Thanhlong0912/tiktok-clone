@@ -18,7 +18,7 @@ import { BsChatDots, BsTrash3 } from "react-icons/bs"
 import { ImMusic } from "react-icons/im"
 import ClientOnly from '../ClientOnly'
 
-const CommentsHeader = ({ post, params }: CommentsHeaderCompTypes) => {
+const CommentsHeader = ({ post, params, isMobileDetail = false }: CommentsHeaderCompTypes) => {
 
     let { setLikesByPost, likesByPost } = useLikeStore()
     let { commentsByPost, setCommentsByPost } = useCommentStore()
@@ -106,27 +106,27 @@ const CommentsHeader = ({ post, params }: CommentsHeaderCompTypes) => {
 
   return (
     <>
-      <div className="flex items-center justify-between px-8">
+      <div className="flex items-center justify-between px-4 lg:px-8">
         <div className="flex items-center">
             <Link href={`/profile/${post?.user_id}`}>
                 {post?.profile.image ? (
-                    <img className="rounded-full lg:mx-0 mx-auto" width="40" src={useCreateBucketUrl(post?.profile.image)} />
+                    <img className="rounded-full lg:mx-0 mx-auto h-9 w-9 lg:h-10 lg:w-10 object-cover" src={useCreateBucketUrl(post?.profile.image)} />
                 ) : (
-                    <div className="w-[40px] h-[40px] bg-gray-200 rounded-full"></div>
+                    <div className="w-9 h-9 lg:w-10 lg:h-10 bg-gray-200 rounded-full"></div>
                 )}
             </Link>
-            <div className="ml-3 pt-0.5">
+            <div className="ml-3">
 
                 <Link
                     href={`/profile/${post?.user_id}`}
-                    className="relative z-10 text-[17px] font-semibold hover:underline dark:text-white"
+                    className="relative z-10 text-[15px] lg:text-[17px] font-semibold hover:underline dark:text-white"
                 >
                     {post?.profile.name}
                 </Link>
 
-                <div className="relative z-0 text-[13px] -mt-5 font-light dark:text-white">
-                    {post?.profile.name}
-                    <span className="relative -top-[2px] text-[30px] pl-1 pr-0.5 ">.</span>
+                <div className="relative z-0 text-[12px] lg:text-[13px] text-gray-500 dark:text-gray-300">
+                    {isMobileDetail ? `@${post?.profile.name}` : post?.profile.name}
+                    <span className="px-1">.</span>
                     <span className="font-medium">{moment(post?.created_at).calendar()}</span>
                 </div>
             </div>
@@ -145,14 +145,14 @@ const CommentsHeader = ({ post, params }: CommentsHeaderCompTypes) => {
         ) : null}
       </div>
 
-      <p className="px-8 mt-4 text-sm dark:text-white">{post?.text}</p>
+      <p className={`px-4 lg:px-8 text-sm dark:text-white ${isMobileDetail ? 'mt-2' : 'mt-3 lg:mt-4'}`}>{post?.text}</p>
 
-      <p className="flex item-center gap-2 px-8 mt-4 text-sm font-bold dark:text-white">
+      <p className={`flex item-center gap-2 px-4 lg:px-8 text-sm font-bold dark:text-white ${isMobileDetail ? 'mt-2' : 'mt-3 lg:mt-4'}`}>
           <ImMusic size="17"/>
           original sound - {post?.profile.name}
       </p>
 
-      <div className="flex items-center px-8 mt-8 dark:text-white">
+      <div className={`flex items-center px-4 lg:px-8 dark:text-white ${isMobileDetail ? 'mt-2' : 'mt-4 lg:mt-8'}`}>
           <ClientOnly>
               <div className="pb-4 text-center flex items-center">
                   <button
