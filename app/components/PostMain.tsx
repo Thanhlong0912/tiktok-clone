@@ -6,6 +6,7 @@ import { BsFillPlayFill } from 'react-icons/bs'
 import { FaCommentDots, FaRegCopy, FaShare } from 'react-icons/fa'
 import { ImMusic } from 'react-icons/im'
 import { IoClose } from 'react-icons/io5'
+import { HiDotsHorizontal } from 'react-icons/hi'
 import { useUser } from '../context/user'
 import useCreateBucketUrl from '../hooks/useCreateBucketUrl'
 import useCreateComment from '../hooks/useCreateComment'
@@ -40,7 +41,7 @@ type UserLikeCacheEntry = {
 const engagementCacheByPost = new Map<string, EngagementCacheEntry>()
 const userLikeCacheByPostUser = new Map<string, UserLikeCacheEntry>()
 
-const PostMain = ({ post }: PostMainCompTypes) => {
+const PostMain = ({ post, isAutoScrollEnabled, onVideoEnded, onAutoScrollChange }: PostMainCompTypes) => {
   const { user } = useUser() || {}
   const { setIsLoginOpen } = useGeneralStore()
   const router = useRouter()
@@ -48,6 +49,7 @@ const PostMain = ({ post }: PostMainCompTypes) => {
   const videoRef = useRef<HTMLVideoElement>(null)
   const desktopVideoRef = useRef<HTMLVideoElement>(null)
   const postMainRef = useRef<HTMLDivElement>(null)
+  const mobileMenuRef = useRef<HTMLDivElement>(null)
   const tapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastTapRef = useRef<number>(0)
   const commentInputRef = useRef<HTMLInputElement | null>(null)
@@ -66,6 +68,7 @@ const PostMain = ({ post }: PostMainCompTypes) => {
   const [commentInput, setCommentInput] = useState<string>('')
   const [isSubmittingComment, setIsSubmittingComment] = useState<boolean>(false)
   const [isShareSheetOpen, setIsShareSheetOpen] = useState<boolean>(false)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false)
   const [videoPreloadMode, setVideoPreloadMode] = useState<'metadata' | 'auto'>('metadata')
   const [isSoundEnabled, setIsSoundEnabledState] = useState<boolean>(false)
 
@@ -460,6 +463,38 @@ const PostMain = ({ post }: PostMainCompTypes) => {
   }, [syncSoundState])
 
   useEffect(() => {
+    if (!isMobileMenuOpen || typeof document === 'undefined') {
+      return
+    }
+
+    const handleOutsideMenuClick = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null
+      if (!mobileMenuRef.current || !target) {
+        return
+      }
+
+      if (!mobileMenuRef.current.contains(target)) {
+        setIsMobileMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleOutsideMenuClick)
+    document.addEventListener('touchstart', handleOutsideMenuClick)
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMobileMenuOpen(false)
+      }
+    }
+    document.addEventListener('keydown', handleEscape)
+
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideMenuClick)
+      document.removeEventListener('touchstart', handleOutsideMenuClick)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [isMobileMenuOpen])
+
+  useEffect(() => {
     return () => {
       videoRef.current?.pause()
       desktopVideoRef.current?.pause()
@@ -477,7 +512,8 @@ const PostMain = ({ post }: PostMainCompTypes) => {
           <video
             ref={videoRef}
             id={`video-${post.id}`}
-            loop
+            loop={!isAutoScrollEnabled}
+            onEnded={() => onVideoEnded(post.id)}
             playsInline
             muted={!isSoundEnabled}
             preload={videoPreloadMode}
@@ -510,6 +546,40 @@ const PostMain = ({ post }: PostMainCompTypes) => {
             Tap for sound
           </button>
         ) : null}
+
+        <div ref={mobileMenuRef} className="absolute right-4 top-[calc(env(safe-area-inset-top)+16px)] z-30">
+          <button
+            onClick={() => setIsMobileMenuOpen((prev) => !prev)}
+            className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-black/45 text-white"
+            aria-label="Open video options"
+          >
+            <HiDotsHorizontal size={24} />
+          </button>
+
+          {isMobileMenuOpen ? (
+            <div className="absolute right-0 mt-2 w-[220px] rounded-2xl border border-white/15 bg-[#2f2f34] p-3 text-white shadow-xl">
+              <div className="flex items-center justify-between rounded-xl px-2 py-2">
+                <span className="text-[17px] font-medium">Auto scroll</span>
+                <button
+                  onClick={() => onAutoScrollChange(!isAutoScrollEnabled)}
+                  type="button"
+                  role="switch"
+                  aria-checked={isAutoScrollEnabled}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+                    isAutoScrollEnabled ? 'bg-[#5fd4ee]' : 'bg-white/25'
+                  }`}
+                  aria-label="Toggle auto scroll"
+                >
+                  <span
+                    className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                      isAutoScrollEnabled ? 'translate-x-[22px]' : 'translate-x-[2px]'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
 
         <div className="absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+74px)] z-20 px-4 text-white">
           <div className="mb-2 flex items-center gap-2">

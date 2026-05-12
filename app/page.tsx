@@ -12,6 +12,11 @@ import MainLayout from "./layouts/MainLayout"
 import { AiOutlineHome } from "react-icons/ai"
 import { BiMessageMinus } from "react-icons/bi"
 import { IoAdd, IoCompassOutline, IoPersonOutline } from "react-icons/io5"
+import {
+  getVideoAutoScrollEnabled,
+  setVideoAutoScrollEnabled,
+  subscribeToVideoAutoScrollPreference,
+} from "./utils/videoAutoScrollPreference"
 
 export default function Home() {
   type MobileFeedTab = 'for-you' | 'following'
@@ -24,8 +29,11 @@ export default function Home() {
   const [isMobileViewport, setIsMobileViewport] = useState<boolean>(false)
   const [mobileViewportHeight, setMobileViewportHeight] = useState<number>(0)
   const [mobileVisibleIndex, setMobileVisibleIndex] = useState<number>(0)
+  const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState<boolean>(false)
   const touchStartXRef = useRef<number | null>(null)
   const touchStartYRef = useRef<number | null>(null)
+  const autoScrollLockRef = useRef<boolean>(false)
+  const autoScrollUnlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const feedContainerRef = useRef<HTMLDivElement | null>(null)
   const lastTabRef = useRef<MobileFeedTab>('for-you')
   const pendingTabRestoreRef = useRef<boolean>(false)
@@ -90,6 +98,14 @@ export default function Home() {
     }
   }, [])
 
+  useEffect(() => {
+    setIsAutoScrollEnabled(getVideoAutoScrollEnabled())
+
+    return subscribeToVideoAutoScrollPreference((enabled) => {
+      setIsAutoScrollEnabled(enabled)
+    })
+  }, [])
+
   const saveTabPosition = useCallback((tab: MobileFeedTab) => {
     const feedElement = feedContainerRef.current
 
@@ -152,6 +168,9 @@ export default function Home() {
   useEffect(() => {
     return () => {
       saveTabPosition(lastTabRef.current)
+      if (autoScrollUnlockTimerRef.current) {
+        clearTimeout(autoScrollUnlockTimerRef.current)
+      }
     }
   }, [saveTabPosition])
 
@@ -206,6 +225,51 @@ export default function Home() {
     const nextIndex = Math.round(container.scrollTop / height)
     setMobileVisibleIndex((prev) => (prev === nextIndex ? prev : nextIndex))
   }, [mobileViewportHeight, shouldVirtualize])
+
+  const handleAutoScrollChange = useCallback((enabled: boolean) => {
+    setVideoAutoScrollEnabled(enabled)
+  }, [])
+
+  const handleVideoEnded = useCallback((postId: string) => {
+    if (!isAutoScrollEnabled || !isMobileViewport || autoScrollLockRef.current) {
+      return
+    }
+
+    const currentIndex = displayedPosts.findIndex((post) => post.id === postId)
+    if (currentIndex < 0) {
+      return
+    }
+
+    const nextIndex = currentIndex + 1
+    if (nextIndex >= displayedPosts.length) {
+      return
+    }
+
+    const feedElement = feedContainerRef.current
+    if (!feedElement) {
+      return
+    }
+
+    const viewportHeight = mobileViewportHeight || feedElement.clientHeight
+    if (!viewportHeight) {
+      return
+    }
+
+    autoScrollLockRef.current = true
+    if (autoScrollUnlockTimerRef.current) {
+      clearTimeout(autoScrollUnlockTimerRef.current)
+    }
+
+    setMobileVisibleIndex(nextIndex)
+    feedElement.scrollTo({
+      top: nextIndex * viewportHeight,
+      behavior: 'smooth',
+    })
+
+    autoScrollUnlockTimerRef.current = setTimeout(() => {
+      autoScrollLockRef.current = false
+    }, 650)
+  }, [displayedPosts, isAutoScrollEnabled, isMobileViewport, mobileViewportHeight])
 
   return (
     <>
@@ -309,7 +373,13 @@ export default function Home() {
                 ) : null}
 
                 {virtualizedPosts.map((post, index) => (
-                  <PostMain post={post} key={`${post.id}-${virtualStartIndex + index}`} />
+                  <PostMain
+                    post={post}
+                    key={`${post.id}-${virtualStartIndex + index}`}
+                    isAutoScrollEnabled={isAutoScrollEnabled}
+                    onVideoEnded={handleVideoEnded}
+                    onAutoScrollChange={handleAutoScrollChange}
+                  />
                 ))}
 
                 {shouldVirtualize && bottomSpacerHeight > 0 ? (
