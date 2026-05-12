@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import moment from "moment"
 import { BiLoaderCircle } from 'react-icons/bi'
 import { BsTrash3 } from 'react-icons/bs'
+import { AiOutlineHeart } from 'react-icons/ai'
 import { useUser } from '@/app/context/user'
 import { useCommentStore } from '@/app/stores/comment'
 import useDeleteComment from '@/app/hooks/useDeleteComment'
@@ -15,59 +16,73 @@ const SingleComment = ({ comment, params }: SingleCommentCompTypes) => {
     const [isDeleting, setIsDeleting] = useState(false)
 
     const deleteThisComment = async () => {
-        let res = confirm("Are you sure you weant to delete this comment?")
+        let res = confirm("Are you sure you want to delete this comment?")
         if (!res) return
 
         try {
             setIsDeleting(true)
             await useDeleteComment(comment?.id)
             setCommentsByPost(params?.postId)
-            setIsDeleting(false)
         } catch (error) {
             console.log(error)
             alert(error)
+        } finally {
+            setIsDeleting(false)
         }
     }
 
   return (
     <>
-      <div id="SingleComment" className="flex items-center justify-between px-8 mt-4">
-        <div className="flex items-center relative w-full">
-            <Link href={`/profile/${comment.profile.user_id}`}>
-                <img
-                    className="absolute top-0 rounded-full lg:mx-0 mx-auto"
-                    width="40"
-                    src={useCreateBucketUrl(comment.profile.image)}
-                />
-            </Link>
-            <div className="ml-14 pt-0.5 w-full">
+      <div id="SingleComment" className="flex items-start gap-3 px-4 py-3 lg:px-6">
+        <Link href={`/profile/${comment.profile.user_id}`} className="shrink-0">
+          <img
+            className="h-10 w-10 rounded-full object-cover"
+            src={useCreateBucketUrl(comment.profile.image)}
+            alt={comment.profile.name}
+          />
+        </Link>
 
-                <div className="text-[18px] font-semibold flex items-center justify-between dark:text-white">
-                    <span className="flex items-center">
-                        {comment?.profile?.name} -
-                        <span className="text-[12px] text-gray-600 dark:text-white font-light ml-1">
-                            {moment(comment?.created_at).calendar()}
-                        </span>
-                    </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <Link
+                href={`/profile/${comment.profile.user_id}`}
+                className="max-w-full truncate text-[17px] font-semibold text-[#9CA0AA] hover:underline"
+              >
+                {comment?.profile?.name}
+              </Link>
 
-                    {contextUser?.user?.id == comment.profile.user_id ? (
-                        <button
-                            disabled={isDeleting}
-                            onClick={() => deleteThisComment()}
-                        >
-                            {isDeleting
-                                ? <BiLoaderCircle className="animate-spin" color="#E91E62" size="20"/>
-                                : <BsTrash3 className="cursor-pointer" size="25"/>
-                            }
-                        </button>
-                    ) : null}
-                </div>
+              <p className="mt-1 break-words text-[16px] leading-6 text-white lg:text-[17px]">
+                {comment.text}
+              </p>
 
-                <p className="text-[15px] font-light dark:text-white">{comment.text}</p>
+              <div className="mt-2 flex items-center gap-4 text-[14px] font-semibold text-[#9CA0AA]">
+                <span>{moment(comment?.created_at).fromNow()}</span>
+                <button className="hover:text-white">Reply</button>
 
+                {contextUser?.user?.id == comment.profile.user_id ? (
+                  <button
+                    disabled={isDeleting}
+                    onClick={() => deleteThisComment()}
+                    className="inline-flex items-center text-[#9CA0AA] hover:text-white disabled:opacity-60"
+                  >
+                    {isDeleting ? (
+                      <BiLoaderCircle className="animate-spin" size="16" />
+                    ) : (
+                      <BsTrash3 size="15" />
+                    )}
+                  </button>
+                ) : null}
+              </div>
             </div>
+
+            <button className="mt-1 inline-flex min-w-[40px] flex-col items-center text-[#9CA0AA] hover:text-white">
+              <AiOutlineHeart size={22} />
+              <span className="text-[13px]">0</span>
+            </button>
+          </div>
         </div>
-    </div>
+      </div>
     </>
   )
 }

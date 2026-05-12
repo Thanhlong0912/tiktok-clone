@@ -583,7 +583,7 @@ const PostMain = ({ post }: PostMainCompTypes) => {
         </div>
 
         {isCommentsSheetOpen ? (
-          <div className="fixed inset-0 z-[70] flex items-end bg-black/45 md:items-center md:justify-center">
+          <div className="fixed inset-0 z-[70] flex items-end bg-black/45 md:hidden">
             <button
               onClick={() => setIsCommentsSheetOpen(false)}
               aria-label="Close comments sheet"
@@ -764,6 +764,89 @@ const PostMain = ({ post }: PostMainCompTypes) => {
           </div>
         </div>
       </div>
+
+      {isCommentsSheetOpen ? (
+        <div className="fixed inset-0 z-[80] hidden md:block">
+          <button
+            onClick={() => setIsCommentsSheetOpen(false)}
+            aria-label="Close comments panel"
+            className="absolute inset-0 bg-black/55"
+          />
+
+          <div className="absolute right-0 top-0 flex h-full w-[460px] max-w-[92vw] flex-col border-l border-white/10 bg-black text-white">
+            <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
+              <p className="text-[30px] font-semibold tracking-tight">
+                Comments <span className="text-[#9CA0AA]">{commentsCount}</span>
+              </p>
+              <button
+                onClick={() => setIsCommentsSheetOpen(false)}
+                className="rounded-full bg-[#25262d] p-2 text-[#D5D8DF] hover:text-white"
+              >
+                <IoClose size={21} />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {isCommentsLoading ? (
+                <p className="py-8 text-center text-sm text-[#9CA0AA]">Loading comments...</p>
+              ) : mobileComments.length < 1 ? (
+                <p className="py-8 text-center text-sm text-[#9CA0AA]">No comments yet</p>
+              ) : (
+                mobileComments.map((comment) => (
+                  <div key={comment.id} className="flex items-start gap-3 px-4 py-3">
+                    <img
+                      className="h-10 w-10 rounded-full object-cover"
+                      src={useCreateBucketUrl(comment.profile.image)}
+                      alt={comment.profile.name}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[15px] font-semibold text-[#9CA0AA]">{comment.profile.name}</p>
+                      <p className="mt-1 break-words text-[16px] leading-6 text-white">{comment.text}</p>
+                      <div className="mt-2 flex items-center gap-4 text-[14px] font-semibold text-[#9CA0AA]">
+                        <span>Now</span>
+                        <button className="hover:text-white">Reply</button>
+                      </div>
+                    </div>
+                    <button className="mt-1 inline-flex flex-col items-center text-[#9CA0AA] hover:text-white">
+                      <AiFillHeart size={18} />
+                      <span className="text-[12px]">0</span>
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="border-t border-white/10 px-4 py-3">
+              {!user?.id ? (
+                <button
+                  onClick={() => setIsLoginOpen(true)}
+                  className="flex w-full items-center justify-center gap-2 rounded-full bg-[#F02C56] py-3 text-[16px] font-semibold text-white hover:bg-[#e61f4b]"
+                >
+                  <FaCommentDots size={18} />
+                  Log in to comment
+                </button>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <input
+                    ref={commentInputRef}
+                    value={commentInput}
+                    onChange={(event) => setCommentInput(event.target.value)}
+                    className="w-full rounded-full border border-transparent bg-[#161823] px-4 py-2.5 text-sm text-white outline-none placeholder:text-[#9CA0AA] focus:border-[#494A50]"
+                    placeholder="Add comment..."
+                  />
+                  <button
+                    onClick={submitInlineComment}
+                    disabled={!commentInput.trim() || isSubmittingComment}
+                    className={`text-sm font-semibold ${commentInput.trim() && !isSubmittingComment ? 'text-[#F02C56]' : 'text-[#6D6E75]'}`}
+                  >
+                    {isSubmittingComment ? '...' : 'Post'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

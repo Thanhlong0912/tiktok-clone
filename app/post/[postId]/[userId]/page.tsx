@@ -214,7 +214,7 @@ const Post = ({ params }: PostPageTypes) => {
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-44 bg-gradient-to-t from-black/70 via-black/35 to-transparent" />
 
           <div
-            className={`absolute inset-x-0 bottom-0 z-40 overflow-hidden rounded-t-3xl bg-white transition-[height] duration-300 dark:bg-dark ${
+            className={`absolute inset-x-0 bottom-0 z-40 overflow-hidden rounded-t-3xl bg-black transition-[height] duration-300 ${
               isMobileSheetExpanded ? 'h-[66dvh]' : 'h-[28dvh]'
             }`}
             style={{
@@ -240,7 +240,7 @@ const Post = ({ params }: PostPageTypes) => {
               >
                 <button
                   onClick={() => setIsMobileSheetExpanded((prev) => !prev)}
-                  className="h-1.5 w-14 rounded-full bg-gray-300 dark:bg-gray-600"
+                  className="h-1.5 w-14 rounded-full bg-[#4B4D57]"
                   aria-label="Toggle details panel"
                 />
               </div>
@@ -259,7 +259,7 @@ const Post = ({ params }: PostPageTypes) => {
                   ) : (
                     <button
                       onClick={() => setIsMobileSheetExpanded(true)}
-                      className="mx-4 mt-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#1A1A1A] py-3 text-sm font-semibold text-gray-700 dark:text-gray-200"
+                      className="mx-4 mt-2 rounded-xl border border-[#2D2F39] bg-[#15161B] py-3 text-sm font-semibold text-[#D5D8DF]"
                     >
                       View comments ({commentsByPost.length})
                     </button>
@@ -340,7 +340,7 @@ const Post = ({ params }: PostPageTypes) => {
             </ClientOnly>
           </div>
 
-          <div id="InfoSection" className="relative flex h-full min-h-0 w-full flex-col bg-white dark:bg-dark">
+          <div id="InfoSection" className="relative flex h-full min-h-0 w-full flex-col border-l border-white/10 bg-black">
             <div className="pt-7" />
             <div className="shrink-0">
               <ClientOnly>

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import ClientOnly from '../ClientOnly'
 import { CommentsCompTypes } from '@/app/types'
 import { BiLoaderCircle } from "react-icons/bi"
+import { BsChatDots } from 'react-icons/bs'
 import SingleComment from './SingleComment'
 import { useCommentStore } from '@/app/stores/comment'
 import { useGeneralStore } from '@/app/stores/general'
@@ -33,87 +34,107 @@ const Comments = ({ params, isMobileDetail = false, autoFocusInput = false }: Co
 
   const addComment = async () => {
     if (!contextUser?.user) return setIsLoginOpen(true)
+    if (!comment.trim()) return
 
     try {
-        setIsUploading(true)
-        await useCreateComment(contextUser?.user?.id, params?.postId, comment)
-        setCommentsByPost(params?.postId)
-        setComment('')
-        setIsUploading(false)
+      setIsUploading(true)
+      await useCreateComment(contextUser?.user?.id, params?.postId, comment.trim())
+      setCommentsByPost(params?.postId)
+      setComment('')
     } catch (error) {
-        console.log(error)
-        alert(error)
+      console.log(error)
+      alert(error)
+    } finally {
+      setIsUploading(false)
     }
   }
 
   return (
     <>
-      <div className="relative flex h-full min-h-0 w-full flex-col">
-      <div
+      <div className="relative flex h-full min-h-0 w-full flex-col bg-black text-white">
+        <div
+          className={`shrink-0 px-4 pb-2 pt-1 lg:px-8 ${isMobileDetail ? 'pt-0' : ''}`}
+        >
+          <p className="text-[26px] font-semibold tracking-tight md:text-[20px] lg:text-[28px]">
+            Comments <span className="text-[#9CA0AA]">{commentsByPost.length}</span>
+          </p>
+        </div>
+
+        <div
           id="Comments"
           className={`
-            relative z-0 min-h-0 w-full flex-1 overflow-auto border-t-2 bg-[#F8F8F8] dark:bg-dark
-            ${isMobileDetail ? 'px-0' : ''}
+            relative z-0 min-h-0 w-full flex-1 overflow-auto border-t border-white/10 bg-black
+            px-0
           `}
-      >
-
-          <div className="pt-2"/>
+        >
+          <div className="pt-1" />
 
           <ClientOnly>
-              {commentsByPost.length < 1 ? (
-                  <div className="text-center mt-6 text-xl text-gray-500 dark:text-white">No comments...</div>
-              ) : (
-                  <div>
-                      {commentsByPost.map((comment, index) => (
-                          <SingleComment key={index} comment={comment} params={params} />
-                      ))}
-                  </div>
-              )}
+            {commentsByPost.length < 1 ? (
+              <div className="mt-10 text-center text-[15px] text-[#9CA0AA]">No comments yet</div>
+            ) : (
+              <div>
+                {commentsByPost.map((singleComment) => (
+                  <SingleComment key={singleComment.id} comment={singleComment} params={params} />
+                ))}
+              </div>
+            )}
           </ClientOnly>
 
-          <div className={isMobileDetail ? 'mb-6' : 'mb-28'} />
+          <div className={isMobileDetail ? 'mb-6' : 'mb-4'} />
+        </div>
 
-      </div>
-
-      <div
+        <div
           id="CreateComment"
           className={`
-            flex w-full shrink-0 items-center justify-between border-t-2 bg-white dark:bg-dark
-            px-4 lg:px-8 lg:py-5 py-3 lg:pb-5 pb-[calc(env(safe-area-inset-bottom)+8px)]
+            w-full shrink-0 border-t border-white/10 bg-black px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+12px)] lg:px-8
           `}
-      >
-          <div
-              className={`
-                  bg-[#F1F1F2] flex items-center rounded-lg w-full
-                  ${inputFocused ? 'border-2 border-gray-400' : 'border-2 border-[#F1F1F2]'}
-              `}
-          >
-              <input
+        >
+          {!contextUser?.user ? (
+            <button
+              onClick={() => setIsLoginOpen(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-[#F02C56] py-3 text-[16px] font-semibold text-white hover:bg-[#e61f4b]"
+            >
+              <BsChatDots size={19} />
+              Log in to comment
+            </button>
+          ) : (
+            <div className="flex items-center gap-3">
+              <div
+                className={`
+                  flex w-full items-center rounded-full border bg-[#161823]
+                  ${inputFocused ? 'border-[#494A50]' : 'border-transparent'}
+                `}
+              >
+                <input
                   ref={commentInputRef}
                   onFocus={() => setInputFocused(true)}
                   onBlur={() => setInputFocused(false)}
                   onChange={e => setComment(e.target.value)}
                   value={comment || ''}
-                  className="bg-[#F1F1F2] text-[14px] focus:outline-none w-full p-2 rounded-lg"
+                  className="w-full rounded-full bg-transparent p-3 text-[15px] text-white placeholder:text-[#9CA0AA] focus:outline-none"
                   type="text"
                   placeholder="Add comment..."
-              />
-          </div>
-          {!isUploading ? (
-              <button
-                  disabled={!comment}
+                />
+              </div>
+
+              {!isUploading ? (
+                <button
+                  disabled={!comment.trim()}
                   onClick={() => addComment()}
                   className={`
-                      font-semibold text-sm ml-5 pr-1
-                      ${comment ? 'text-[#F02C56] cursor-pointer' : 'text-gray-400 dark:text-white'}
+                    text-sm font-semibold
+                    ${comment.trim() ? 'text-[#F02C56]' : 'text-[#6D6E75]'}
                   `}
-              >
+                >
                   Post
-              </button>
-          ) : (
-              <BiLoaderCircle className="animate-spin" color="#E91E62" size="20" />
+                </button>
+              ) : (
+                <BiLoaderCircle className="animate-spin text-[#F02C56]" size={20} />
+              )}
+            </div>
           )}
-      </div>
+        </div>
       </div>
     </>
   )
