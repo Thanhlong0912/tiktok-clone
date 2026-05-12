@@ -48,11 +48,11 @@ const Comments = ({ params, isMobileDetail = false, autoFocusInput = false }: Co
 
   return (
     <>
-      <div className="relative flex h-full w-full flex-col">
+      <div className="relative flex h-full min-h-0 w-full flex-col">
       <div
           id="Comments"
           className={`
-            relative z-0 w-full flex-1 overflow-auto border-t-2 bg-[#F8F8F8] dark:bg-dark
+            relative z-0 min-h-0 w-full flex-1 overflow-auto border-t-2 bg-[#F8F8F8] dark:bg-dark
             ${isMobileDetail ? 'px-0' : ''}
           `}
       >
@@ -78,7 +78,7 @@ const Comments = ({ params, isMobileDetail = false, autoFocusInput = false }: Co
       <div
           id="CreateComment"
           className={`
-            flex items-center justify-between border-t-2 bg-white dark:bg-dark w-full
+            flex w-full shrink-0 items-center justify-between border-t-2 bg-white dark:bg-dark
             px-4 lg:px-8 lg:py-5 py-3 lg:pb-5 pb-[calc(env(safe-area-inset-bottom)+8px)]
           `}
       >

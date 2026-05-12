@@ -142,7 +142,7 @@ const Post = ({ params }: PostPageTypes) => {
 
   return (
     <>
-      <div id="PostPage" className="w-full h-[100dvh] bg-black overflow-hidden">
+      <div id="PostPage" className="h-[100dvh] w-full overflow-hidden bg-black">
         <div className="relative h-full w-full lg:hidden">
           <ClientOnly>
             <div className="h-full w-full bg-black">
@@ -214,8 +214,8 @@ const Post = ({ params }: PostPageTypes) => {
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-44 bg-gradient-to-t from-black/70 via-black/35 to-transparent" />
 
           <div
-            className={`absolute inset-x-0 bottom-0 z-40 rounded-t-3xl bg-white dark:bg-dark overflow-hidden transition-[height] duration-300 ${
-              isMobileSheetExpanded ? 'h-[64dvh]' : 'h-[24dvh]'
+            className={`absolute inset-x-0 bottom-0 z-40 overflow-hidden rounded-t-3xl bg-white transition-[height] duration-300 dark:bg-dark ${
+              isMobileSheetExpanded ? 'h-[66dvh]' : 'h-[28dvh]'
             }`}
             style={{
               transform: `translateY(${isSheetDragging ? Math.max(-80, Math.min(120, sheetDragOffsetY)) : 0}px)`,
@@ -269,8 +269,8 @@ const Post = ({ params }: PostPageTypes) => {
             </div>
         </div>
 
-        <div className="hidden lg:flex justify-between w-full h-full bg-black overflow-auto">
-          <div className="lg:w-[calc(100%-540px)] h-full relative">
+        <div className="hidden h-full w-full overflow-hidden bg-black lg:grid lg:grid-cols-[minmax(0,1fr)_540px]">
+          <div className="relative h-full min-w-0 overflow-hidden">
             <button
               onClick={() => {
                 router.push(`/profile/${params.userId}`)
@@ -308,7 +308,7 @@ const Post = ({ params }: PostPageTypes) => {
             />
 
             <ClientOnly>
-              <div className="bg-black lg:min-w-[480px] z-10 relative h-full">
+              <div className="relative z-10 h-full bg-black">
                 {postById?.video_url ? (
                   <>
                     <video
@@ -319,7 +319,7 @@ const Post = ({ params }: PostPageTypes) => {
                       loop
                       muted={!isSoundEnabled}
                       onPlay={() => pauseOtherVideos(desktopVideoRef.current)}
-                      className="h-full mx-auto object-contain"
+                      className="mx-auto h-full w-full max-w-[960px] object-contain"
                       src={useCreateBucketUrl(postById.video_url)}
                     />
                     {!isSoundEnabled ? (
@@ -340,13 +340,16 @@ const Post = ({ params }: PostPageTypes) => {
             </ClientOnly>
           </div>
 
-          <div id="InfoSection" className="max-w-[550px] relative w-full h-full bg-white dark:bg-dark">
-            <div className="py-7" />
-
-            <ClientOnly>
-              {postById?.video_url ? <CommentsHeader post={postById} params={params} /> : null}
-            </ClientOnly>
-            <Comments params={params} autoFocusInput={shouldOpenCommentsMode} />
+          <div id="InfoSection" className="relative flex h-full min-h-0 w-full flex-col bg-white dark:bg-dark">
+            <div className="pt-7" />
+            <div className="shrink-0">
+              <ClientOnly>
+                {postById?.video_url ? <CommentsHeader post={postById} params={params} /> : null}
+              </ClientOnly>
+            </div>
+            <div className="min-h-0 flex-1">
+              <Comments params={params} autoFocusInput={shouldOpenCommentsMode} />
+            </div>
           </div>
         </div>
       </div>
