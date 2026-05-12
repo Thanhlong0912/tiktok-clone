@@ -11,6 +11,8 @@ import useIsFollowing from '../hooks/useIsFollowing'
 import { PostMainCompTypes } from '../types'
 import PostMainLikes from './PostMainLikes'
 
+const followStateByPair = new Map<string, string | null>()
+
 const PostMain = ({ post }: PostMainCompTypes) => {
   const { user } = useUser() || {};
   const router = useRouter()
@@ -22,8 +24,23 @@ const PostMain = ({ post }: PostMainCompTypes) => {
 
   useEffect(() => {
     const checkFollow = async () => {
-      if (!user?.id || !post.profile.user_id || user.id === post.profile.user_id) return;
+      if (!user?.id || !post.profile.user_id) {
+        setFollowId(null)
+        return
+      }
+      if (user.id === post.profile.user_id) {
+        setFollowId(null)
+        return
+      }
+      const followKey = `${user.id}:${post.profile.user_id}`
+      const cachedFollowId = followStateByPair.get(followKey)
+
+      if (cachedFollowId !== undefined) {
+        setFollowId(cachedFollowId)
+      }
+
       const id = await useIsFollowing(user.id, post.profile.user_id);
+      followStateByPair.set(followKey, id)
       setFollowId(id);
     }
     checkFollow();
@@ -41,6 +58,7 @@ const PostMain = ({ post }: PostMainCompTypes) => {
         // Unfollow
         try {
             await useDeleteFollow(followId);
+            followStateByPair.set(`${user.id}:${post.profile.user_id}`, null)
             setFollowId(null);
         } catch (error) {
             console.error(error);
@@ -48,13 +66,9 @@ const PostMain = ({ post }: PostMainCompTypes) => {
     } else {
         // Follow
         try {
-            await useCreateFollow(user.id, post.profile.user_id);
-            // Re-check to get the ID, or we could just set a temporary true state.
-            // Better to re-fetch or assume success if we want the ID for future deletion.
-            // But useCreateFollow doesn't return ID. Let's fix useCreateFollow if we need IT.
-            // Actually usually we just re-check.
-             const id = await useIsFollowing(user.id, post.profile.user_id);
-             setFollowId(id);
+            const id = await useCreateFollow(user.id, post.profile.user_id);
+            followStateByPair.set(`${user.id}:${post.profile.user_id}`, id)
+            setFollowId(id);
         } catch (error) {
             console.error(error);
         }
