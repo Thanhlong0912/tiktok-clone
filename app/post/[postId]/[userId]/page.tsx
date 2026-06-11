@@ -3,11 +3,17 @@
 import ClientOnly from '@/app/components/ClientOnly'
 import Comments from '@/app/components/post/Comments'
 import CommentsHeader from '@/app/components/post/CommentsHeader'
+import VideoOptionsMenu from '@/app/components/VideoOptionsMenu'
 import useCreateBucketUrl from '@/app/hooks/useCreateBucketUrl'
 import { useCommentStore } from '@/app/stores/comment'
 import { useLikeStore } from '@/app/stores/like'
 import { usePostStore } from '@/app/stores/post'
 import { PostPageTypes } from '@/app/types'
+import {
+  getVideoAutoScrollEnabled,
+  setVideoAutoScrollEnabled,
+  subscribeToVideoAutoScrollPreference,
+} from '@/app/utils/videoAutoScrollPreference'
 import { pauseOtherVideos } from '@/app/utils/videoPlayback'
 import { getVideoSoundEnabled, setVideoSoundEnabled, subscribeToVideoSoundPreference } from '@/app/utils/videoSoundPreference'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -24,9 +30,14 @@ const Post = ({ params }: PostPageTypes) => {
   const [isSheetDragging, setIsSheetDragging] = useState<boolean>(false)
   const [sheetDragOffsetY, setSheetDragOffsetY] = useState<number>(0)
   const [isSoundEnabled, setIsSoundEnabledState] = useState<boolean>(false)
+  const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState<boolean>(false)
   const sheetDragStartYRef = useRef<number | null>(null)
   const mobileVideoRef = useRef<HTMLVideoElement | null>(null)
   const desktopVideoRef = useRef<HTMLVideoElement | null>(null)
+  const isAutoScrollEnabledRef = useRef<boolean>(false)
+  const postsByUserRef = useRef(postsByUser)
+  const currentPostIdRef = useRef<string>(params.postId)
+  const lastAutoNavigatedPostRef = useRef<{ postId: string; handledAt: number } | null>(null)
 
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -95,6 +106,56 @@ const Post = ({ params }: PostPageTypes) => {
     router.push(`/post/${prevPost.id}/${params.userId}`)
   }
 
+  const handleAutoScrollChange = (enabled: boolean) => {
+    isAutoScrollEnabledRef.current = enabled
+    setVideoAutoScrollEnabled(enabled)
+  }
+
+  const handleVideoEnded = () => {
+    if (!isAutoScrollEnabledRef.current) {
+      return
+    }
+
+    const currentPostId = currentPostIdRef.current
+    const lastAutoNavigatedPost = lastAutoNavigatedPostRef.current
+    if (lastAutoNavigatedPost?.postId === currentPostId && Date.now() - lastAutoNavigatedPost.handledAt < 1000) {
+      return
+    }
+
+    const posts = postsByUserRef.current
+    const activeIndex = posts.findIndex((post) => post.id === currentPostId)
+    if (activeIndex === -1 || activeIndex >= posts.length - 1) {
+      return
+    }
+
+    pauseCurrentVideos()
+    lastAutoNavigatedPostRef.current = { postId: currentPostId, handledAt: Date.now() }
+
+    const nextPost = posts[activeIndex + 1]
+    router.push(`/post/${nextPost.id}/${nextPost.user_id || params.userId}`)
+  }
+
+  useEffect(() => {
+    const enabled = getVideoAutoScrollEnabled()
+    isAutoScrollEnabledRef.current = enabled
+    setIsAutoScrollEnabled(enabled)
+
+    return subscribeToVideoAutoScrollPreference((enabled) => {
+      isAutoScrollEnabledRef.current = enabled
+      setIsAutoScrollEnabled(enabled)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (postsByUser.length > 0) {
+      postsByUserRef.current = postsByUser
+    }
+  }, [postsByUser])
+
+  useEffect(() => {
+    currentPostIdRef.current = params.postId
+  }, [params.postId])
+
   useEffect(() => {
     syncSoundState(getVideoSoundEnabled())
 
@@ -152,8 +213,9 @@ const Post = ({ params }: PostPageTypes) => {
                   key={postById.video_url}
                   autoPlay
                   playsInline
-                  loop
+                  loop={!isAutoScrollEnabled}
                   muted={!isSoundEnabled}
+                  onEnded={handleVideoEnded}
                   onPlay={() => pauseOtherVideos(mobileVideoRef.current)}
                   className="h-full w-full object-cover"
                   src={useCreateBucketUrl(postById.video_url)}
@@ -174,6 +236,12 @@ const Post = ({ params }: PostPageTypes) => {
               Tap for sound
             </button>
           ) : null}
+
+          <VideoOptionsMenu
+            isAutoScrollEnabled={isAutoScrollEnabled}
+            onAutoScrollChange={handleAutoScrollChange}
+            className="absolute right-4 top-[calc(env(safe-area-inset-top)+54px)]"
+          />
 
           <button
             onClick={() => {
@@ -309,15 +377,23 @@ const Post = ({ params }: PostPageTypes) => {
 
             <ClientOnly>
               <div className="relative z-10 h-full bg-black">
-                {postById?.video_url ? (
-                  <>
+                <>
+                  <VideoOptionsMenu
+                    isAutoScrollEnabled={isAutoScrollEnabled}
+                    onAutoScrollChange={handleAutoScrollChange}
+                    className="absolute right-5 top-5"
+                  />
+
+                  {postById?.video_url ? (
+                    <>
                     <video
                       ref={desktopVideoRef}
                       key={postById.video_url}
                       autoPlay
                       controls
-                      loop
+                      loop={!isAutoScrollEnabled}
                       muted={!isSoundEnabled}
+                      onEnded={handleVideoEnded}
                       onPlay={() => pauseOtherVideos(desktopVideoRef.current)}
                       className="mx-auto h-full w-full max-w-[960px] object-contain"
                       src={useCreateBucketUrl(postById.video_url)}
@@ -330,12 +406,13 @@ const Post = ({ params }: PostPageTypes) => {
                         Click for sound
                       </button>
                     ) : null}
-                  </>
-                ) : (
-                  <div className="h-full bg-black flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white" />
-                  </div>
-                )}
+                    </>
+                  ) : (
+                    <div className="h-full bg-black flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white" />
+                    </div>
+                  )}
+                </>
               </div>
             </ClientOnly>
           </div>

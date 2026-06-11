@@ -133,6 +133,7 @@ export interface PostUserCompTypes {
 
 export interface PostMainCompTypes {
   post: PostWithProfile
+  feedIndex?: number
   isAutoScrollEnabled: boolean
   onVideoEnded: (postId: string) => void
   onAutoScrollChange: (enabled: boolean) => void

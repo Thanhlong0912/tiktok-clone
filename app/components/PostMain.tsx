@@ -6,7 +6,6 @@ import { BsFillPlayFill } from 'react-icons/bs'
 import { FaCommentDots, FaRegCopy, FaShare } from 'react-icons/fa'
 import { ImMusic } from 'react-icons/im'
 import { IoClose } from 'react-icons/io5'
-import { HiDotsHorizontal } from 'react-icons/hi'
 import { useUser } from '../context/user'
 import useCreateBucketUrl from '../hooks/useCreateBucketUrl'
 import useCreateComment from '../hooks/useCreateComment'
@@ -22,6 +21,7 @@ import { CommentWithProfile, Like, PostMainCompTypes } from '../types'
 import { pauseOtherVideos } from '../utils/videoPlayback'
 import { getVideoSoundEnabled, setVideoSoundEnabled, subscribeToVideoSoundPreference } from '../utils/videoSoundPreference'
 import PostMainLikes from './PostMainLikes'
+import VideoOptionsMenu from './VideoOptionsMenu'
 
 const followStateByPair = new Map<string, string | null>()
 const ENGAGEMENT_CACHE_TTL_MS = 20000
@@ -41,7 +41,7 @@ type UserLikeCacheEntry = {
 const engagementCacheByPost = new Map<string, EngagementCacheEntry>()
 const userLikeCacheByPostUser = new Map<string, UserLikeCacheEntry>()
 
-const PostMain = ({ post, isAutoScrollEnabled, onVideoEnded, onAutoScrollChange }: PostMainCompTypes) => {
+const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoScrollChange }: PostMainCompTypes) => {
   const { user } = useUser() || {}
   const { setIsLoginOpen } = useGeneralStore()
   const router = useRouter()
@@ -49,7 +49,6 @@ const PostMain = ({ post, isAutoScrollEnabled, onVideoEnded, onAutoScrollChange 
   const videoRef = useRef<HTMLVideoElement>(null)
   const desktopVideoRef = useRef<HTMLVideoElement>(null)
   const postMainRef = useRef<HTMLDivElement>(null)
-  const mobileMenuRef = useRef<HTMLDivElement>(null)
   const tapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastTapRef = useRef<number>(0)
   const commentInputRef = useRef<HTMLInputElement | null>(null)
@@ -68,7 +67,6 @@ const PostMain = ({ post, isAutoScrollEnabled, onVideoEnded, onAutoScrollChange 
   const [commentInput, setCommentInput] = useState<string>('')
   const [isSubmittingComment, setIsSubmittingComment] = useState<boolean>(false)
   const [isShareSheetOpen, setIsShareSheetOpen] = useState<boolean>(false)
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false)
   const [videoPreloadMode, setVideoPreloadMode] = useState<'metadata' | 'auto'>('metadata')
   const [isSoundEnabled, setIsSoundEnabledState] = useState<boolean>(false)
 
@@ -463,38 +461,6 @@ const PostMain = ({ post, isAutoScrollEnabled, onVideoEnded, onAutoScrollChange 
   }, [syncSoundState])
 
   useEffect(() => {
-    if (!isMobileMenuOpen || typeof document === 'undefined') {
-      return
-    }
-
-    const handleOutsideMenuClick = (event: MouseEvent | TouchEvent) => {
-      const target = event.target as Node | null
-      if (!mobileMenuRef.current || !target) {
-        return
-      }
-
-      if (!mobileMenuRef.current.contains(target)) {
-        setIsMobileMenuOpen(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleOutsideMenuClick)
-    document.addEventListener('touchstart', handleOutsideMenuClick)
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsMobileMenuOpen(false)
-      }
-    }
-    document.addEventListener('keydown', handleEscape)
-
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideMenuClick)
-      document.removeEventListener('touchstart', handleOutsideMenuClick)
-      document.removeEventListener('keydown', handleEscape)
-    }
-  }, [isMobileMenuOpen])
-
-  useEffect(() => {
     return () => {
       videoRef.current?.pause()
       desktopVideoRef.current?.pause()
@@ -502,7 +468,11 @@ const PostMain = ({ post, isAutoScrollEnabled, onVideoEnded, onAutoScrollChange 
   }, [])
 
   return (
-    <div ref={postMainRef} className="snap-start h-[100dvh] md:h-auto md:snap-none">
+    <div
+      ref={postMainRef}
+      data-feed-index={feedIndex}
+      className="snap-start h-[100dvh] md:h-auto md:snap-none"
+    >
       <div className="relative h-full w-full overflow-hidden bg-black md:hidden">
         <button
           onClick={handleMobileVideoTap}
@@ -547,39 +517,11 @@ const PostMain = ({ post, isAutoScrollEnabled, onVideoEnded, onAutoScrollChange 
           </button>
         ) : null}
 
-        <div ref={mobileMenuRef} className="absolute right-4 top-[calc(env(safe-area-inset-top)+16px)] z-30">
-          <button
-            onClick={() => setIsMobileMenuOpen((prev) => !prev)}
-            className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-black/45 text-white"
-            aria-label="Open video options"
-          >
-            <HiDotsHorizontal size={24} />
-          </button>
-
-          {isMobileMenuOpen ? (
-            <div className="absolute right-0 mt-2 w-[220px] rounded-2xl border border-white/15 bg-[#2f2f34] p-3 text-white shadow-xl">
-              <div className="flex items-center justify-between rounded-xl px-2 py-2">
-                <span className="text-[17px] font-medium">Auto scroll</span>
-                <button
-                  onClick={() => onAutoScrollChange(!isAutoScrollEnabled)}
-                  type="button"
-                  role="switch"
-                  aria-checked={isAutoScrollEnabled}
-                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
-                    isAutoScrollEnabled ? 'bg-[#5fd4ee]' : 'bg-white/25'
-                  }`}
-                  aria-label="Toggle auto scroll"
-                >
-                  <span
-                    className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                      isAutoScrollEnabled ? 'translate-x-[22px]' : 'translate-x-[2px]'
-                    }`}
-                  />
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </div>
+        <VideoOptionsMenu
+          isAutoScrollEnabled={isAutoScrollEnabled}
+          onAutoScrollChange={onAutoScrollChange}
+          className="absolute right-4 top-[calc(env(safe-area-inset-top)+16px)]"
+        />
 
         <div className="absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+74px)] z-20 px-4 text-white">
           <div className="mb-2 flex items-center gap-2">
@@ -799,12 +741,18 @@ const PostMain = ({ post, isAutoScrollEnabled, onVideoEnded, onAutoScrollChange 
               onClick={() => router.push(`/post/${post.id}/${post.profile.user_id}`)}
               className="relative flex max-h-[625px] min-h-[525px] max-w-[295px] cursor-pointer items-center rounded-xl bg-black"
             >
+              <VideoOptionsMenu
+                isAutoScrollEnabled={isAutoScrollEnabled}
+                onAutoScrollChange={onAutoScrollChange}
+                className="absolute right-3 top-3"
+              />
               <video
                 ref={desktopVideoRef}
                 id={`video-desktop-${post.id}`}
-                loop
+                loop={!isAutoScrollEnabled}
                 controls
                 muted={!isSoundEnabled}
+                onEnded={() => onVideoEnded(post.id)}
                 onPlay={handleDesktopVideoPlay}
                 preload={videoPreloadMode}
                 className="mx-auto h-full rounded-xl object-cover"

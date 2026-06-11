@@ -30,10 +30,10 @@ export default function Home() {
   const [mobileViewportHeight, setMobileViewportHeight] = useState<number>(0)
   const [mobileVisibleIndex, setMobileVisibleIndex] = useState<number>(0)
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState<boolean>(false)
+  const isAutoScrollEnabledRef = useRef<boolean>(false)
   const touchStartXRef = useRef<number | null>(null)
   const touchStartYRef = useRef<number | null>(null)
-  const autoScrollLockRef = useRef<boolean>(false)
-  const autoScrollUnlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastAutoScrolledPostRef = useRef<{ postId: string; handledAt: number } | null>(null)
   const feedContainerRef = useRef<HTMLDivElement | null>(null)
   const lastTabRef = useRef<MobileFeedTab>('for-you')
   const pendingTabRestoreRef = useRef<boolean>(false)
@@ -99,9 +99,12 @@ export default function Home() {
   }, [])
 
   useEffect(() => {
-    setIsAutoScrollEnabled(getVideoAutoScrollEnabled())
+    const enabled = getVideoAutoScrollEnabled()
+    isAutoScrollEnabledRef.current = enabled
+    setIsAutoScrollEnabled(enabled)
 
     return subscribeToVideoAutoScrollPreference((enabled) => {
+      isAutoScrollEnabledRef.current = enabled
       setIsAutoScrollEnabled(enabled)
     })
   }, [])
@@ -168,9 +171,6 @@ export default function Home() {
   useEffect(() => {
     return () => {
       saveTabPosition(lastTabRef.current)
-      if (autoScrollUnlockTimerRef.current) {
-        clearTimeout(autoScrollUnlockTimerRef.current)
-      }
     }
   }, [saveTabPosition])
 
@@ -227,11 +227,17 @@ export default function Home() {
   }, [mobileViewportHeight, shouldVirtualize])
 
   const handleAutoScrollChange = useCallback((enabled: boolean) => {
+    isAutoScrollEnabledRef.current = enabled
     setVideoAutoScrollEnabled(enabled)
   }, [])
 
   const handleVideoEnded = useCallback((postId: string) => {
-    if (!isAutoScrollEnabled || !isMobileViewport || autoScrollLockRef.current) {
+    if (!isAutoScrollEnabledRef.current) {
+      return
+    }
+
+    const lastAutoScrolledPost = lastAutoScrolledPostRef.current
+    if (lastAutoScrolledPost?.postId === postId && Date.now() - lastAutoScrolledPost.handledAt < 1000) {
       return
     }
 
@@ -250,26 +256,18 @@ export default function Home() {
       return
     }
 
-    const viewportHeight = mobileViewportHeight || feedElement.clientHeight
-    if (!viewportHeight) {
-      return
-    }
+    const nextPostElement = feedElement.querySelector<HTMLElement>(`[data-feed-index="${nextIndex}"]`)
+    const targetScrollTop = nextPostElement
+      ? nextPostElement.getBoundingClientRect().top - feedElement.getBoundingClientRect().top + feedElement.scrollTop
+      : nextIndex * (mobileViewportHeight || feedElement.clientHeight)
 
-    autoScrollLockRef.current = true
-    if (autoScrollUnlockTimerRef.current) {
-      clearTimeout(autoScrollUnlockTimerRef.current)
-    }
-
+    lastAutoScrolledPostRef.current = { postId, handledAt: Date.now() }
     setMobileVisibleIndex(nextIndex)
     feedElement.scrollTo({
-      top: nextIndex * viewportHeight,
+      top: targetScrollTop,
       behavior: 'smooth',
     })
-
-    autoScrollUnlockTimerRef.current = setTimeout(() => {
-      autoScrollLockRef.current = false
-    }, 650)
-  }, [displayedPosts, isAutoScrollEnabled, isMobileViewport, mobileViewportHeight])
+  }, [displayedPosts, mobileViewportHeight])
 
   return (
     <>
@@ -376,6 +374,7 @@ export default function Home() {
                   <PostMain
                     post={post}
                     key={`${post.id}-${virtualStartIndex + index}`}
+                    feedIndex={virtualStartIndex + index}
                     isAutoScrollEnabled={isAutoScrollEnabled}
                     onVideoEnded={handleVideoEnded}
                     onAutoScrollChange={handleAutoScrollChange}
