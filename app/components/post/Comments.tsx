@@ -51,19 +51,19 @@ const Comments = ({ params, isMobileDetail = false, autoFocusInput = false }: Co
 
   return (
     <>
-      <div className="relative flex h-full min-h-0 w-full flex-col bg-black text-white">
+      <div className="relative flex h-full min-h-0 w-full flex-col bg-white text-gray-900 dark:bg-black dark:text-white">
         <div
           className={`shrink-0 px-4 pb-2 pt-1 lg:px-8 ${isMobileDetail ? 'pt-0' : ''}`}
         >
           <p className="text-[26px] font-semibold tracking-tight md:text-[20px] lg:text-[28px]">
-            Comments <span className="text-[#9CA0AA]">{commentsByPost.length}</span>
+            Comments <span className="text-gray-500 dark:text-[#9CA0AA]">{commentsByPost.length}</span>
           </p>
         </div>
 
         <div
           id="Comments"
           className={`
-            relative z-0 min-h-0 w-full flex-1 overflow-auto border-t border-white/10 bg-black
+            relative z-0 min-h-0 w-full flex-1 overflow-auto border-t border-gray-200 bg-white dark:border-white/10 dark:bg-black
             px-0
           `}
         >
@@ -71,7 +71,7 @@ const Comments = ({ params, isMobileDetail = false, autoFocusInput = false }: Co
 
           <ClientOnly>
             {commentsByPost.length < 1 ? (
-              <div className="mt-10 text-center text-[15px] text-[#9CA0AA]">No comments yet</div>
+              <div className="mt-10 text-center text-[15px] text-gray-500 dark:text-[#9CA0AA]">No comments yet</div>
             ) : (
               <div>
                 {commentsByPost.map((singleComment) => (
@@ -87,7 +87,7 @@ const Comments = ({ params, isMobileDetail = false, autoFocusInput = false }: Co
         <div
           id="CreateComment"
           className={`
-            w-full shrink-0 border-t border-white/10 bg-black px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+12px)] lg:px-8
+            w-full shrink-0 border-t border-gray-200 bg-white px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+12px)] dark:border-white/10 dark:bg-black lg:px-8
           `}
         >
           {!contextUser?.user ? (
@@ -102,8 +102,8 @@ const Comments = ({ params, isMobileDetail = false, autoFocusInput = false }: Co
             <div className="flex items-center gap-3">
               <div
                 className={`
-                  flex w-full items-center rounded-full border bg-[#161823]
-                  ${inputFocused ? 'border-[#494A50]' : 'border-transparent'}
+                  flex w-full items-center rounded-full border bg-gray-100 dark:bg-[#161823]
+                  ${inputFocused ? 'border-gray-400 dark:border-[#494A50]' : 'border-transparent'}
                 `}
               >
                 <input
@@ -112,7 +112,7 @@ const Comments = ({ params, isMobileDetail = false, autoFocusInput = false }: Co
                   onBlur={() => setInputFocused(false)}
                   onChange={e => setComment(e.target.value)}
                   value={comment || ''}
-                  className="w-full rounded-full bg-transparent p-3 text-[15px] text-white placeholder:text-[#9CA0AA] focus:outline-none"
+                  className="w-full rounded-full bg-transparent p-3 text-[15px] text-gray-900 placeholder:text-gray-500 focus:outline-none dark:text-white dark:placeholder:text-[#9CA0AA]"
                   type="text"
                   placeholder="Add comment..."
                 />

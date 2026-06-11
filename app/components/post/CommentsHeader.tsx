@@ -106,7 +106,7 @@ const CommentsHeader = ({ post, params, isMobileDetail = false }: CommentsHeader
 
   return (
     <>
-      <div className="flex items-center justify-between px-4 lg:px-8 text-white">
+      <div className="flex items-center justify-between px-4 text-gray-900 dark:text-white lg:px-8">
         <div className="flex items-center">
             <Link href={`/profile/${post?.user_id}`}>
                 {post?.profile.image ? (
@@ -124,7 +124,7 @@ const CommentsHeader = ({ post, params, isMobileDetail = false }: CommentsHeader
                     {post?.profile.name}
                 </Link>
 
-                <div className="relative z-0 text-[12px] text-[#9CA0AA] lg:text-[13px]">
+                <div className="relative z-0 text-[12px] text-gray-500 dark:text-[#9CA0AA] lg:text-[13px]">
                     {isMobileDetail ? `@${post?.profile.name}` : post?.profile.name}
                     <span className="px-1">.</span>
                     <span className="font-medium">{moment(post?.created_at).calendar()}</span>
@@ -137,7 +137,7 @@ const CommentsHeader = ({ post, params, isMobileDetail = false }: CommentsHeader
                 {isDeleteing ? (
                     <BiLoaderCircle className="animate-spin" size="25"/>
                 ) : (
-                    <button className='text-[#9CA0AA] hover:text-white' disabled={isDeleteing} onClick={() => deletePost()}>
+                    <button className='text-gray-500 hover:text-gray-900 dark:text-[#9CA0AA] dark:hover:text-white' disabled={isDeleteing} onClick={() => deletePost()}>
                         <BsTrash3 className="cursor-pointer" size="25"/>
                     </button>
                 )}
@@ -145,20 +145,20 @@ const CommentsHeader = ({ post, params, isMobileDetail = false }: CommentsHeader
         ) : null}
       </div>
 
-      <p className={`px-4 text-sm text-white lg:px-8 ${isMobileDetail ? 'mt-2' : 'mt-3 lg:mt-4'}`}>{post?.text}</p>
+      <p className={`px-4 text-sm text-gray-900 dark:text-white lg:px-8 ${isMobileDetail ? 'mt-2' : 'mt-3 lg:mt-4'}`}>{post?.text}</p>
 
-      <p className={`flex item-center gap-2 px-4 text-sm font-bold text-[#D5D8DF] lg:px-8 ${isMobileDetail ? 'mt-2' : 'mt-3 lg:mt-4'}`}>
+      <p className={`flex item-center gap-2 px-4 text-sm font-bold text-gray-700 dark:text-[#D5D8DF] lg:px-8 ${isMobileDetail ? 'mt-2' : 'mt-3 lg:mt-4'}`}>
           <ImMusic size="17"/>
           original sound - {post?.profile.name}
       </p>
 
-      <div className={`flex items-center px-4 text-white lg:px-8 ${isMobileDetail ? 'mt-2' : 'mt-4 lg:mt-8'}`}>
+      <div className={`flex items-center px-4 text-gray-900 dark:text-white lg:px-8 ${isMobileDetail ? 'mt-2' : 'mt-4 lg:mt-8'}`}>
           <ClientOnly>
               <div className="pb-4 text-center flex items-center">
                   <button
                       disabled={hasClickedLike}
                       onClick={() => likeOrUnlike()}
-                      className="cursor-pointer rounded-full bg-[#23252f] p-2"
+                      className="cursor-pointer rounded-full bg-gray-100 p-2 dark:bg-[#23252f]"
                   >
                       {!hasClickedLike ? (
                             <AiFillHeart color={likesByPost.length > 0 && userLiked ? '#ff2626' : ''} size="25"/>
@@ -166,17 +166,17 @@ const CommentsHeader = ({ post, params, isMobileDetail = false }: CommentsHeader
                             <BiLoaderCircle className="animate-spin" size="25"/>
                         )}
                   </button>
-                  <span className="pr-4 pl-2 text-xs font-semibold text-[#D5D8DF]">
+                  <span className="pr-4 pl-2 text-xs font-semibold text-gray-700 dark:text-[#D5D8DF]">
                     {likesByPost.length}
                   </span>
               </div>
           </ClientOnly>
 
           <div className="pb-4 text-center flex items-center">
-              <div className="cursor-pointer rounded-full bg-[#23252f] p-2">
+              <div className="cursor-pointer rounded-full bg-gray-100 p-2 dark:bg-[#23252f]">
                   <BsChatDots size={25} />
               </div>
-              <span className="pl-2 text-xs font-semibold text-[#D5D8DF]">{commentsByPost?.length}</span>
+              <span className="pl-2 text-xs font-semibold text-gray-700 dark:text-[#D5D8DF]">{commentsByPost?.length}</span>
           </div>
       </div>
     </>

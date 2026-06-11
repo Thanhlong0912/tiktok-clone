@@ -4,6 +4,7 @@ import AllOverlays from './components/AllOverlays'
 import './globals.css'
 import UserProvider from './context/user'
 import ScrollToTopButton from './components/ScrollToTopButton'
+import ThemeInitializer from './components/ThemeInitializer'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -17,6 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <UserProvider>
         <body className='overflow-x-hidden dark:bg-dark'>
+          <ThemeInitializer />
           <AllOverlays />
           {children}
           <ScrollToTopButton />

@@ -659,19 +659,19 @@ const PostMain = ({ post, isAutoScrollEnabled, onVideoEnded, onAutoScrollChange 
               aria-label="Close comments sheet"
               className="absolute inset-0"
             />
-            <div className="relative w-full rounded-t-2xl bg-white px-4 pt-4 text-black md:max-w-[520px] md:rounded-2xl md:max-h-[78vh] md:flex md:flex-col">
+            <div className="relative w-full rounded-t-2xl bg-white px-4 pt-4 text-gray-900 dark:bg-black dark:text-white md:max-w-[520px] md:rounded-2xl md:max-h-[78vh] md:flex md:flex-col">
               <div className="mb-3 flex items-center justify-between">
                 <p className="text-sm font-semibold">{commentsCount} comments</p>
-                <button onClick={() => setIsCommentsSheetOpen(false)} className="rounded-full bg-gray-100 p-1">
+                <button onClick={() => setIsCommentsSheetOpen(false)} className="rounded-full bg-gray-100 p-1 dark:bg-[#25262d]">
                   <IoClose size={22} />
                 </button>
               </div>
 
               <div className="max-h-[48dvh] overflow-y-auto pb-3 md:max-h-[55vh]">
                 {isCommentsLoading ? (
-                  <p className="py-8 text-center text-sm text-gray-500">Loading comments...</p>
+                  <p className="py-8 text-center text-sm text-gray-500 dark:text-[#9CA0AA]">Loading comments...</p>
                 ) : mobileComments.length < 1 ? (
-                  <p className="py-8 text-center text-sm text-gray-500">No comments yet</p>
+                  <p className="py-8 text-center text-sm text-gray-500 dark:text-[#9CA0AA]">No comments yet</p>
                 ) : (
                   mobileComments.map((comment) => (
                     <div key={comment.id} className="mb-3 flex items-start gap-3">
@@ -689,13 +689,13 @@ const PostMain = ({ post, isAutoScrollEnabled, onVideoEnded, onAutoScrollChange 
                 )}
               </div>
 
-              <div className="border-t py-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
+              <div className="border-t border-gray-200 py-3 pb-[calc(env(safe-area-inset-bottom)+12px)] dark:border-white/10">
                 <div className="flex items-center gap-3">
                   <input
                     ref={commentInputRef}
                     value={commentInput}
                     onChange={(event) => setCommentInput(event.target.value)}
-                    className="w-full rounded-full border border-gray-200 bg-gray-100 px-4 py-2.5 text-sm outline-none focus:border-gray-400"
+                    className="w-full rounded-full border border-gray-200 bg-gray-100 px-4 py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-500 focus:border-gray-400 dark:border-transparent dark:bg-[#161823] dark:text-white dark:placeholder:text-[#9CA0AA] dark:focus:border-[#494A50]"
                     placeholder="Add comment..."
                   />
                   <button
@@ -843,14 +843,14 @@ const PostMain = ({ post, isAutoScrollEnabled, onVideoEnded, onAutoScrollChange 
             className="absolute inset-0 bg-black/55"
           />
 
-          <div className="absolute right-0 top-0 flex h-full w-[460px] max-w-[92vw] flex-col border-l border-white/10 bg-black text-white">
-            <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
+          <div className="absolute right-0 top-0 flex h-full w-[460px] max-w-[92vw] flex-col border-l border-gray-200 bg-white text-gray-900 dark:border-white/10 dark:bg-black dark:text-white">
+            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-white/10">
               <p className="text-[30px] font-semibold tracking-tight">
-                Comments <span className="text-[#9CA0AA]">{commentsCount}</span>
+                Comments <span className="text-gray-500 dark:text-[#9CA0AA]">{commentsCount}</span>
               </p>
               <button
                 onClick={() => setIsCommentsSheetOpen(false)}
-                className="rounded-full bg-[#25262d] p-2 text-[#D5D8DF] hover:text-white"
+                className="rounded-full bg-gray-100 p-2 text-gray-600 hover:text-gray-900 dark:bg-[#25262d] dark:text-[#D5D8DF] dark:hover:text-white"
               >
                 <IoClose size={21} />
               </button>
@@ -858,9 +858,9 @@ const PostMain = ({ post, isAutoScrollEnabled, onVideoEnded, onAutoScrollChange 
 
             <div className="min-h-0 flex-1 overflow-y-auto">
               {isCommentsLoading ? (
-                <p className="py-8 text-center text-sm text-[#9CA0AA]">Loading comments...</p>
+                <p className="py-8 text-center text-sm text-gray-500 dark:text-[#9CA0AA]">Loading comments...</p>
               ) : mobileComments.length < 1 ? (
-                <p className="py-8 text-center text-sm text-[#9CA0AA]">No comments yet</p>
+                <p className="py-8 text-center text-sm text-gray-500 dark:text-[#9CA0AA]">No comments yet</p>
               ) : (
                 mobileComments.map((comment) => (
                   <div key={comment.id} className="flex items-start gap-3 px-4 py-3">
@@ -870,14 +870,14 @@ const PostMain = ({ post, isAutoScrollEnabled, onVideoEnded, onAutoScrollChange 
                       alt={comment.profile.name}
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[15px] font-semibold text-[#9CA0AA]">{comment.profile.name}</p>
-                      <p className="mt-1 break-words text-[16px] leading-6 text-white">{comment.text}</p>
-                      <div className="mt-2 flex items-center gap-4 text-[14px] font-semibold text-[#9CA0AA]">
+                      <p className="truncate text-[15px] font-semibold text-gray-500 dark:text-[#9CA0AA]">{comment.profile.name}</p>
+                      <p className="mt-1 break-words text-[16px] leading-6 text-gray-900 dark:text-white">{comment.text}</p>
+                      <div className="mt-2 flex items-center gap-4 text-[14px] font-semibold text-gray-500 dark:text-[#9CA0AA]">
                         <span>Now</span>
-                        <button className="hover:text-white">Reply</button>
+                        <button className="hover:text-gray-900 dark:hover:text-white">Reply</button>
                       </div>
                     </div>
-                    <button className="mt-1 inline-flex flex-col items-center text-[#9CA0AA] hover:text-white">
+                    <button className="mt-1 inline-flex flex-col items-center text-gray-500 hover:text-gray-900 dark:text-[#9CA0AA] dark:hover:text-white">
                       <AiFillHeart size={18} />
                       <span className="text-[12px]">0</span>
                     </button>
@@ -886,7 +886,7 @@ const PostMain = ({ post, isAutoScrollEnabled, onVideoEnded, onAutoScrollChange 
               )}
             </div>
 
-            <div className="border-t border-white/10 px-4 py-3">
+            <div className="border-t border-gray-200 px-4 py-3 dark:border-white/10">
               {!user?.id ? (
                 <button
                   onClick={() => setIsLoginOpen(true)}
@@ -901,7 +901,7 @@ const PostMain = ({ post, isAutoScrollEnabled, onVideoEnded, onAutoScrollChange 
                     ref={commentInputRef}
                     value={commentInput}
                     onChange={(event) => setCommentInput(event.target.value)}
-                    className="w-full rounded-full border border-transparent bg-[#161823] px-4 py-2.5 text-sm text-white outline-none placeholder:text-[#9CA0AA] focus:border-[#494A50]"
+                    className="w-full rounded-full border border-transparent bg-gray-100 px-4 py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-500 focus:border-gray-400 dark:bg-[#161823] dark:text-white dark:placeholder:text-[#9CA0AA] dark:focus:border-[#494A50]"
                     placeholder="Add comment..."
                   />
                   <button
