@@ -1,17 +1,17 @@
-import React from 'react'
-import { AiOutlineLoading3Quarters } from "react-icons/ai"
-import { SiSoundcharts } from "react-icons/si"
-import { BiErrorCircle } from "react-icons/bi"
-import { useEffect } from "react"
-import Link from "next/link"
-import { PostUserCompTypes } from "@/app/types"
 import useCreateBucketUrl from '@/app/hooks/useCreateBucketUrl'
-import { pauseOtherVideos } from '@/app/utils/videoPlayback'
+import { PostUserCompTypes } from "@/app/types"
+import { pauseOtherVideos, pauseVideosDuringNavigation, rememberVideoPlayback } from '@/app/utils/videoPlayback'
+import Link from "next/link"
+import { useEffect, useRef } from "react"
+import { AiOutlineLoading3Quarters } from "react-icons/ai"
+import { BiErrorCircle } from "react-icons/bi"
+import { SiSoundcharts } from "react-icons/si"
 
 const PostUser = ({ post }: PostUserCompTypes) => {
+  const videoRef = useRef<HTMLVideoElement | null>(null)
 
   useEffect(() => {
-    const video = document.getElementById(`video${post?.id}`) as HTMLVideoElement
+    const video = videoRef.current
 
     if (!video) {
       return
@@ -38,7 +38,17 @@ const PostUser = ({ post }: PostUserCompTypes) => {
       video.pause()
     }
 
-  }, [])
+  }, [post?.id])
+
+  const openPostDetail = () => {
+    rememberVideoPlayback({
+      postId: post.id,
+      userId: post.user_id,
+      video: videoRef.current,
+      source: 'profile',
+    })
+    pauseVideosDuringNavigation()
+  }
 
   return (
     <>
@@ -48,8 +58,9 @@ const PostUser = ({ post }: PostUserCompTypes) => {
                   <AiOutlineLoading3Quarters className="animate-spin ml-1" size="80" color="#FFFFFF" />
               </div>
           ) : (
-              <Link href={`/post/${post.id}/${post.user_id}`}>
+              <Link href={`/post/${post.id}/${post.user_id}`} onClick={openPostDetail}>
                   <video
+                      ref={videoRef}
                       id={`video${post.id}`}
                       loop
                       muted

@@ -14,10 +14,16 @@ import {
   setVideoAutoScrollEnabled,
   subscribeToVideoAutoScrollPreference,
 } from '@/app/utils/videoAutoScrollPreference'
-import { pauseOtherVideos } from '@/app/utils/videoPlayback'
+import {
+  clearRememberedVideoPlayback,
+  getRememberedVideoPlayback,
+  pauseOtherVideos,
+  pauseVideosDuringNavigation,
+  type VideoPlaybackSnapshot,
+} from '@/app/utils/videoPlayback'
 import { getVideoSoundEnabled, setVideoSoundEnabled, subscribeToVideoSoundPreference } from '@/app/utils/videoSoundPreference'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AiOutlineClose } from 'react-icons/ai'
 import { BiChevronDown, BiChevronUp } from 'react-icons/bi'
 
@@ -31,6 +37,8 @@ const Post = ({ params }: PostPageTypes) => {
   const [sheetDragOffsetY, setSheetDragOffsetY] = useState<number>(0)
   const [isSoundEnabled, setIsSoundEnabledState] = useState<boolean>(false)
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState<boolean>(false)
+  const [isDesktopViewport, setIsDesktopViewport] = useState<boolean | null>(null)
+  const [videoAspectRatio, setVideoAspectRatio] = useState<number | null>(null)
   const sheetDragStartYRef = useRef<number | null>(null)
   const mobileVideoRef = useRef<HTMLVideoElement | null>(null)
   const desktopVideoRef = useRef<HTMLVideoElement | null>(null)
@@ -38,8 +46,10 @@ const Post = ({ params }: PostPageTypes) => {
   const postsByUserRef = useRef(postsByUser)
   const currentPostIdRef = useRef<string>(params.postId)
   const lastAutoNavigatedPostRef = useRef<{ postId: string; handledAt: number } | null>(null)
+  const playbackSnapshotRef = useRef<VideoPlaybackSnapshot | null>(null)
 
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const shouldOpenCommentsMode = searchParams.get('comments') === '1'
 
@@ -56,17 +66,37 @@ const Post = ({ params }: PostPageTypes) => {
     }
   }, [params.postId, shouldOpenCommentsMode])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const media = window.matchMedia('(min-width: 1024px)')
+    const syncViewport = () => setIsDesktopViewport(media.matches)
+
+    syncViewport()
+    media.addEventListener('change', syncViewport)
+
+    return () => {
+      media.removeEventListener('change', syncViewport)
+    }
+  }, [])
+
   const currentIndex = useMemo(
     () => postsByUser.findIndex((post) => post.id === params.postId),
     [params.postId, postsByUser]
   )
 
-  const pauseCurrentVideos = () => {
+  const pauseCurrentVideos = useCallback((lockDuringNavigation = false) => {
+    if (lockDuringNavigation) {
+      pauseVideosDuringNavigation()
+    }
+
     mobileVideoRef.current?.pause()
     desktopVideoRef.current?.pause()
-  }
+  }, [])
 
-  const syncSoundState = (enabled: boolean) => {
+  const syncSoundState = useCallback((enabled: boolean) => {
     setIsSoundEnabledState(enabled)
 
     if (mobileVideoRef.current) {
@@ -76,22 +106,71 @@ const Post = ({ params }: PostPageTypes) => {
     if (desktopVideoRef.current) {
       desktopVideoRef.current.muted = !enabled
     }
-  }
+  }, [])
+
+  const getActiveVideo = useCallback(() => {
+    if (isDesktopViewport === null) {
+      return desktopVideoRef.current || mobileVideoRef.current
+    }
+
+    return isDesktopViewport ? desktopVideoRef.current : mobileVideoRef.current
+  }, [isDesktopViewport])
 
   const enableSound = () => {
     setVideoSoundEnabled(true)
     syncSoundState(true)
-    const isDesktopViewport = typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches
-    const activeVideo = isDesktopViewport ? desktopVideoRef.current : mobileVideoRef.current
+    const activeVideo = getActiveVideo()
     activeVideo?.play().catch(() => null)
   }
+
+  const playDetailVideo = useCallback((video: HTMLVideoElement | null) => {
+    if (!video) {
+      return
+    }
+
+    pauseOtherVideos(video)
+
+    video.play().catch(() => {
+      if (!video.muted) {
+        setVideoSoundEnabled(false)
+        syncSoundState(false)
+        video.muted = true
+        video.play().catch(() => null)
+      }
+    })
+  }, [syncSoundState])
+
+  const initializeDetailVideo = useCallback((video: HTMLVideoElement | null) => {
+    if (!video) {
+      return
+    }
+
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      setVideoAspectRatio(video.videoWidth / video.videoHeight)
+    }
+
+    const snapshot = playbackSnapshotRef.current
+    if (snapshot?.currentTime) {
+      const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : snapshot.duration
+      const latestSafeTime = duration ? Math.max(duration - 0.2, 0) : snapshot.currentTime
+      try {
+        video.currentTime = Math.min(snapshot.currentTime, latestSafeTime)
+      } catch {
+        // Some remote streams delay seeking until more data is buffered.
+      }
+      playbackSnapshotRef.current = null
+      clearRememberedVideoPlayback(params.postId)
+    }
+
+    playDetailVideo(video)
+  }, [params.postId, playDetailVideo])
 
   const loopThroughPostsUp = () => {
     if (currentIndex <= 0) {
       return
     }
 
-    pauseCurrentVideos()
+    pauseCurrentVideos(true)
     const nextPost = postsByUser[currentIndex - 1]
     router.push(`/post/${nextPost.id}/${params.userId}`)
   }
@@ -101,7 +180,7 @@ const Post = ({ params }: PostPageTypes) => {
       return
     }
 
-    pauseCurrentVideos()
+    pauseCurrentVideos(true)
     const prevPost = postsByUser[currentIndex + 1]
     router.push(`/post/${prevPost.id}/${params.userId}`)
   }
@@ -128,12 +207,17 @@ const Post = ({ params }: PostPageTypes) => {
       return
     }
 
-    pauseCurrentVideos()
+    pauseCurrentVideos(true)
     lastAutoNavigatedPostRef.current = { postId: currentPostId, handledAt: Date.now() }
 
     const nextPost = posts[activeIndex + 1]
     router.push(`/post/${nextPost.id}/${nextPost.user_id || params.userId}`)
   }
+
+  const closePostDetail = useCallback(() => {
+    pauseCurrentVideos(true)
+    router.push(`/profile/${params.userId}`)
+  }, [params.userId, pauseCurrentVideos, router])
 
   useEffect(() => {
     const enabled = getVideoAutoScrollEnabled()
@@ -154,6 +238,8 @@ const Post = ({ params }: PostPageTypes) => {
 
   useEffect(() => {
     currentPostIdRef.current = params.postId
+    playbackSnapshotRef.current = getRememberedVideoPlayback(params.postId)
+    setVideoAspectRatio(null)
   }, [params.postId])
 
   useEffect(() => {
@@ -162,13 +248,31 @@ const Post = ({ params }: PostPageTypes) => {
     return subscribeToVideoSoundPreference((enabled) => {
       syncSoundState(enabled)
     })
-  }, [])
+  }, [syncSoundState])
 
   useEffect(() => {
     return () => {
-      pauseCurrentVideos()
+      pauseCurrentVideos(true)
     }
-  }, [])
+  }, [pathname, pauseCurrentVideos])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const pauseBeforeDocumentExit = () => {
+      pauseCurrentVideos(true)
+    }
+
+    window.addEventListener('pagehide', pauseBeforeDocumentExit)
+    window.addEventListener('beforeunload', pauseBeforeDocumentExit)
+
+    return () => {
+      window.removeEventListener('pagehide', pauseBeforeDocumentExit)
+      window.removeEventListener('beforeunload', pauseBeforeDocumentExit)
+    }
+  }, [pauseCurrentVideos])
 
   const onSheetDragStart = (clientY: number) => {
     sheetDragStartYRef.current = clientY
@@ -201,23 +305,29 @@ const Post = ({ params }: PostPageTypes) => {
     setSheetDragOffsetY(0)
   }
 
+  const desktopVideoClassName = videoAspectRatio !== null && videoAspectRatio < 1
+    ? 'h-full max-h-[calc(100dvh-64px)] w-auto max-w-full rounded-sm object-contain'
+    : 'h-auto max-h-[calc(100dvh-64px)] w-full max-w-[1120px] rounded-sm object-contain'
+  const desktopVideoStyle = videoAspectRatio ? { aspectRatio: String(videoAspectRatio) } : undefined
+
   return (
     <>
       <div id="PostPage" className="h-[100dvh] w-full overflow-hidden bg-black">
         <div className="relative h-full w-full lg:hidden">
           <ClientOnly>
             <div className="h-full w-full bg-black">
-              {postById?.video_url ? (
+              {isDesktopViewport === false && postById?.video_url ? (
                 <video
                   ref={mobileVideoRef}
                   key={postById.video_url}
-                  autoPlay
                   playsInline
+                  preload="auto"
                   loop={!isAutoScrollEnabled}
                   muted={!isSoundEnabled}
                   onEnded={handleVideoEnded}
+                  onLoadedMetadata={() => initializeDetailVideo(mobileVideoRef.current)}
                   onPlay={() => pauseOtherVideos(mobileVideoRef.current)}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-contain"
                   src={useCreateBucketUrl(postById.video_url)}
                 />
               ) : (
@@ -244,9 +354,7 @@ const Post = ({ params }: PostPageTypes) => {
           />
 
           <button
-            onClick={() => {
-              router.push(`/profile/${params.userId}`)
-            }}
+            onClick={closePostDetail}
             className="absolute z-30 left-4 top-[calc(env(safe-area-inset-top)+12px)] text-white rounded-full bg-gray-700/90 p-1.5 hover:bg-gray-800"
           >
             <AiOutlineClose size="27" />
@@ -340,9 +448,7 @@ const Post = ({ params }: PostPageTypes) => {
         <div className="hidden h-full w-full overflow-hidden bg-black lg:grid lg:grid-cols-[minmax(0,1fr)_540px]">
           <div className="relative h-full min-w-0 overflow-hidden">
             <button
-              onClick={() => {
-                router.push(`/profile/${params.userId}`)
-              }}
+              onClick={closePostDetail}
               className="absolute z-20 top-5 left-5 text-white rounded-full bg-gray-700 p-1.5 hover:bg-gray-800"
             >
               <AiOutlineClose size="27" />
@@ -376,7 +482,7 @@ const Post = ({ params }: PostPageTypes) => {
             />
 
             <ClientOnly>
-              <div className="relative z-10 h-full bg-black">
+              <div className="relative z-10 flex h-full min-h-0 items-center justify-center bg-black px-6 py-8">
                 <>
                   <VideoOptionsMenu
                     isAutoScrollEnabled={isAutoScrollEnabled}
@@ -384,18 +490,20 @@ const Post = ({ params }: PostPageTypes) => {
                     className="absolute right-5 top-5"
                   />
 
-                  {postById?.video_url ? (
+                  {isDesktopViewport === true && postById?.video_url ? (
                     <>
                     <video
                       ref={desktopVideoRef}
                       key={postById.video_url}
-                      autoPlay
                       controls
+                      preload="auto"
                       loop={!isAutoScrollEnabled}
                       muted={!isSoundEnabled}
                       onEnded={handleVideoEnded}
+                      onLoadedMetadata={() => initializeDetailVideo(desktopVideoRef.current)}
                       onPlay={() => pauseOtherVideos(desktopVideoRef.current)}
-                      className="mx-auto h-full w-full max-w-[960px] object-contain"
+                      className={desktopVideoClassName}
+                      style={desktopVideoStyle}
                       src={useCreateBucketUrl(postById.video_url)}
                     />
                     {!isSoundEnabled ? (

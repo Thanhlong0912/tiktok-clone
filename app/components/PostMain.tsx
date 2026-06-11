@@ -18,7 +18,7 @@ import useGetLikesByPostId from '../hooks/useGetLikesByPostId'
 import useIsFollowing from '../hooks/useIsFollowing'
 import { useGeneralStore } from '../stores/general'
 import { CommentWithProfile, Like, PostMainCompTypes } from '../types'
-import { pauseOtherVideos } from '../utils/videoPlayback'
+import { pauseOtherVideos, pauseVideosDuringNavigation, rememberVideoPlayback } from '../utils/videoPlayback'
 import { getVideoSoundEnabled, setVideoSoundEnabled, subscribeToVideoSoundPreference } from '../utils/videoSoundPreference'
 import PostMainLikes from './PostMainLikes'
 import VideoOptionsMenu from './VideoOptionsMenu'
@@ -52,6 +52,7 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
   const tapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastTapRef = useRef<number>(0)
   const commentInputRef = useRef<HTMLInputElement | null>(null)
+  const isOpeningPostDetailRef = useRef<boolean>(false)
 
   const [followId, setFollowId] = useState<string | null>(null)
   const [isVideoPaused, setIsVideoPaused] = useState<boolean>(false)
@@ -165,7 +166,7 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
         const activeVideo = isDesktopViewport ? desktopVideoRef.current : videoRef.current
 
         if (entries[0].isIntersecting) {
-          if (!activeVideo) {
+          if (!activeVideo || isOpeningPostDetailRef.current) {
             return
           }
 
@@ -383,6 +384,25 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
     setIsShareSheetOpen(false)
     alert('Copied to clipboard!')
   }, [post.id, post.profile.user_id])
+
+  const rememberCurrentPlayback = useCallback(() => {
+    const isDesktopViewport = typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+    const activeVideo = isDesktopViewport ? desktopVideoRef.current : videoRef.current
+
+    rememberVideoPlayback({
+      postId: post.id,
+      userId: post.profile.user_id,
+      video: activeVideo,
+      source: 'feed',
+    })
+  }, [post.id, post.profile.user_id])
+
+  const openPostDetail = useCallback(() => {
+    isOpeningPostDetailRef.current = true
+    rememberCurrentPlayback()
+    pauseVideosDuringNavigation()
+    router.push(`/post/${post.id}/${post.profile.user_id}`)
+  }, [post.id, post.profile.user_id, rememberCurrentPlayback, router])
 
   const openCommentsSheet = useCallback(async () => {
     setIsCommentsSheetOpen(true)
@@ -677,7 +697,7 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
                   Copy link
                 </button>
                 <button
-                  onClick={() => router.push(`/post/${post.id}/${post.profile.user_id}`)}
+                  onClick={openPostDetail}
                   className="w-full rounded-full bg-black px-4 py-2.5 text-sm font-semibold text-white"
                 >
                   Go to post
@@ -738,7 +758,7 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
 
           <div className="mt-2.5 flex flex-1">
             <div
-              onClick={() => router.push(`/post/${post.id}/${post.profile.user_id}`)}
+              onClick={openPostDetail}
               className="relative flex max-h-[625px] min-h-[525px] max-w-[295px] cursor-pointer items-center rounded-xl bg-black"
             >
               <VideoOptionsMenu
