@@ -358,7 +358,7 @@ export default function Home() {
                 {mobileFeedTab === 'following' ? (
                   <div>
                     <p className="text-lg font-semibold">No posts from followed creators yet.</p>
-                    <p className="mt-2 text-sm text-white/80 md:text-gray-500">Switch to For You to discover more videos.</p>
+                    <p className="mt-2 text-sm text-white/80 md:text-gray-500">Switch to For You to discover more posts.</p>
                   </div>
                 ) : (
                   <p className="text-lg font-semibold">No posts available yet.</p>

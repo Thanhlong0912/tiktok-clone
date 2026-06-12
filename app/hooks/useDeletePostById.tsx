@@ -3,8 +3,9 @@ import useDeleteComment from "./useDeleteComment";
 import useDeleteLike from "./useDeleteLike";
 import useGetCommentsByPostId from "./useGetCommentsByPostId";
 import useGetLikesByPostId from "./useGetLikesByPostId";
+import { getPostStorageFileIds } from "../utils/postMedia";
 
-const useDeletePostById = async (postId: string, currentImage: string) => {
+const useDeletePostById = async (postId: string, currentMedia: string) => {
     try {
         const likes = await useGetLikesByPostId(postId)
         likes.forEach(async like => { await useDeleteLike(like?.id) })
@@ -17,7 +18,11 @@ const useDeletePostById = async (postId: string, currentImage: string) => {
             String(process.env.NEXT_PUBLIC_COLLECTION_ID_POST),
             postId
         );
-        await storage.deleteFile(String(process.env.NEXT_PUBLIC_BUCKET_ID), currentImage);
+        await Promise.allSettled(
+            getPostStorageFileIds(currentMedia).map((fileId) => (
+                storage.deleteFile(String(process.env.NEXT_PUBLIC_BUCKET_ID), fileId)
+            ))
+        );
     } catch (error) {
         throw error
     }

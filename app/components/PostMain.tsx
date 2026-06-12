@@ -20,6 +20,8 @@ import { useGeneralStore } from '../stores/general'
 import { CommentWithProfile, Like, PostMainCompTypes } from '../types'
 import { pauseOtherVideos, pauseVideosDuringNavigation, rememberVideoPlayback } from '../utils/videoPlayback'
 import { getVideoSoundEnabled, setVideoSoundEnabled, subscribeToVideoSoundPreference } from '../utils/videoSoundPreference'
+import { getImagePostIds, isImagePost } from '../utils/postMedia'
+import ImageSlideshow from './ImageSlideshow'
 import PostMainLikes from './PostMainLikes'
 import VideoOptionsMenu from './VideoOptionsMenu'
 
@@ -70,6 +72,7 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
   const [isShareSheetOpen, setIsShareSheetOpen] = useState<boolean>(false)
   const [videoPreloadMode, setVideoPreloadMode] = useState<'metadata' | 'auto'>('metadata')
   const [isSoundEnabled, setIsSoundEnabledState] = useState<boolean>(false)
+  const [isMediaActive, setIsMediaActive] = useState<boolean>(false)
 
   const applyEngagementSnapshot = useCallback((likes: Like[], comments: CommentWithProfile[]) => {
     setLikesCount(likes.length)
@@ -164,8 +167,15 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
       (entries) => {
         const isDesktopViewport = typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
         const activeVideo = isDesktopViewport ? desktopVideoRef.current : videoRef.current
+        const isPostImage = isImagePost(post.video_url)
 
         if (entries[0].isIntersecting) {
+          setIsMediaActive(true)
+
+          if (isPostImage) {
+            return
+          }
+
           if (!activeVideo || isOpeningPostDetailRef.current) {
             return
           }
@@ -185,6 +195,7 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
               }
             })
         } else {
+          setIsMediaActive(false)
           videoRef.current?.pause()
           desktopVideoRef.current?.pause()
           setIsVideoPaused(true)
@@ -206,7 +217,7 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
         observer.unobserve(postMainElement)
       }
     }
-  }, [isSoundEnabled, post.id])
+  }, [isSoundEnabled, post.id, post.video_url])
 
   useEffect(() => {
     const postMainElement = postMainRef.current
@@ -386,6 +397,10 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
   }, [post.id, post.profile.user_id])
 
   const rememberCurrentPlayback = useCallback(() => {
+    if (isImagePost(post.video_url)) {
+      return
+    }
+
     const isDesktopViewport = typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
     const activeVideo = isDesktopViewport ? desktopVideoRef.current : videoRef.current
 
@@ -395,7 +410,7 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
       video: activeVideo,
       source: 'feed',
     })
-  }, [post.id, post.profile.user_id])
+  }, [post.id, post.profile.user_id, post.video_url])
 
   const openPostDetail = useCallback(() => {
     isOpeningPostDetailRef.current = true
@@ -487,6 +502,12 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
     }
   }, [])
 
+  const postIsImage = isImagePost(post.video_url)
+  const postImageIds = getImagePostIds(post.video_url)
+  const desktopMediaContainerClassName = postIsImage
+    ? 'relative flex max-h-[625px] min-h-[420px] w-full max-w-[520px] cursor-pointer items-center overflow-hidden rounded-xl bg-black'
+    : 'relative flex max-h-[625px] min-h-[525px] max-w-[295px] cursor-pointer items-center rounded-xl bg-black'
+
   return (
     <div
       ref={postMainRef}
@@ -494,37 +515,55 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
       className="snap-start h-[100dvh] md:h-auto md:snap-none"
     >
       <div className="relative h-full w-full overflow-hidden bg-black md:hidden">
-        <button
-          onClick={handleMobileVideoTap}
-          className="relative h-full w-full"
-          aria-label="Toggle video"
-        >
-          <video
-            ref={videoRef}
-            id={`video-${post.id}`}
-            loop={!isAutoScrollEnabled}
-            onEnded={() => onVideoEnded(post.id)}
-            playsInline
-            muted={!isSoundEnabled}
-            preload={videoPreloadMode}
-            className="h-full w-full object-cover"
-            src={useCreateBucketUrl(post.video_url)}
-          />
+        {postIsImage ? (
+          <div className="relative h-full w-full" onDoubleClick={handleDoubleTapLike}>
+            <ImageSlideshow
+              imageIds={postImageIds}
+              autoPlay={isMediaActive}
+              onCycleComplete={() => onVideoEnded(post.id)}
+              className="h-full w-full"
+              altPrefix={`${post.profile.name} image`}
+            />
 
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-black/65 via-black/20 to-transparent" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-black/65 via-black/20 to-transparent" />
 
-          {showHeartBurst ? (
-            <AiFillHeart className="heart-pop pointer-events-none absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 text-[96px] text-white/95" />
-          ) : null}
+            {showHeartBurst ? (
+              <AiFillHeart className="heart-pop pointer-events-none absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 text-[96px] text-white/95" />
+            ) : null}
+          </div>
+        ) : (
+          <button
+            onClick={handleMobileVideoTap}
+            className="relative h-full w-full"
+            aria-label="Toggle video"
+          >
+            <video
+              ref={videoRef}
+              id={`video-${post.id}`}
+              loop={!isAutoScrollEnabled}
+              onEnded={() => onVideoEnded(post.id)}
+              playsInline
+              muted={!isSoundEnabled}
+              preload={videoPreloadMode}
+              className="h-full w-full object-cover"
+              src={useCreateBucketUrl(post.video_url)}
+            />
 
-          {isVideoPaused ? (
-            <span className="pointer-events-none absolute left-1/2 top-1/2 z-20 inline-flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-white">
-              <BsFillPlayFill size={28} />
-            </span>
-          ) : null}
-        </button>
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-black/65 via-black/20 to-transparent" />
 
-        {!isSoundEnabled ? (
+            {showHeartBurst ? (
+              <AiFillHeart className="heart-pop pointer-events-none absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 text-[96px] text-white/95" />
+            ) : null}
+
+            {isVideoPaused ? (
+              <span className="pointer-events-none absolute left-1/2 top-1/2 z-20 inline-flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-white">
+                <BsFillPlayFill size={28} />
+              </span>
+            ) : null}
+          </button>
+        )}
+
+        {!postIsImage && !isSoundEnabled ? (
           <button
             onClick={(event) => {
               event.preventDefault()
@@ -759,26 +798,37 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
           <div className="mt-2.5 flex flex-1">
             <div
               onClick={openPostDetail}
-              className="relative flex max-h-[625px] min-h-[525px] max-w-[295px] cursor-pointer items-center rounded-xl bg-black"
+              className={desktopMediaContainerClassName}
             >
               <VideoOptionsMenu
                 isAutoScrollEnabled={isAutoScrollEnabled}
                 onAutoScrollChange={onAutoScrollChange}
                 className="absolute right-3 top-3"
               />
-              <video
-                ref={desktopVideoRef}
-                id={`video-desktop-${post.id}`}
-                loop={!isAutoScrollEnabled}
-                controls
-                muted={!isSoundEnabled}
-                onEnded={() => onVideoEnded(post.id)}
-                onPlay={handleDesktopVideoPlay}
-                preload={videoPreloadMode}
-                className="mx-auto h-full rounded-xl object-cover"
-                src={useCreateBucketUrl(post.video_url)}
-              />
-              {!isSoundEnabled ? (
+              {postIsImage ? (
+                <ImageSlideshow
+                  imageIds={postImageIds}
+                  autoPlay={isMediaActive}
+                  onCycleComplete={() => onVideoEnded(post.id)}
+                  className="h-full min-h-[420px] w-full rounded-xl"
+                  imageClassName="rounded-xl"
+                  altPrefix={`${post.profile.name} image`}
+                />
+              ) : (
+                <video
+                  ref={desktopVideoRef}
+                  id={`video-desktop-${post.id}`}
+                  loop={!isAutoScrollEnabled}
+                  controls
+                  muted={!isSoundEnabled}
+                  onEnded={() => onVideoEnded(post.id)}
+                  onPlay={handleDesktopVideoPlay}
+                  preload={videoPreloadMode}
+                  className="mx-auto h-full rounded-xl object-cover"
+                  src={useCreateBucketUrl(post.video_url)}
+                />
+              )}
+              {!postIsImage && !isSoundEnabled ? (
                 <button
                   onClick={(event) => {
                     event.preventDefault()

@@ -1,6 +1,7 @@
 "use client"
 
 import ClientOnly from '@/app/components/ClientOnly'
+import ImageSlideshow from '@/app/components/ImageSlideshow'
 import Comments from '@/app/components/post/Comments'
 import CommentsHeader from '@/app/components/post/CommentsHeader'
 import VideoOptionsMenu from '@/app/components/VideoOptionsMenu'
@@ -14,6 +15,7 @@ import {
   setVideoAutoScrollEnabled,
   subscribeToVideoAutoScrollPreference,
 } from '@/app/utils/videoAutoScrollPreference'
+import { getImagePostIds, isImagePost } from '@/app/utils/postMedia'
 import {
   clearRememberedVideoPlayback,
   getRememberedVideoPlayback,
@@ -309,6 +311,8 @@ const Post = ({ params }: PostPageTypes) => {
     ? 'h-full max-h-[calc(100dvh-64px)] w-auto max-w-full rounded-sm object-contain'
     : 'h-auto max-h-[calc(100dvh-64px)] w-full max-w-[1120px] rounded-sm object-contain'
   const desktopVideoStyle = videoAspectRatio ? { aspectRatio: String(videoAspectRatio) } : undefined
+  const postIsImage = isImagePost(postById?.video_url)
+  const postImageIds = getImagePostIds(postById?.video_url)
 
   return (
     <>
@@ -317,19 +321,30 @@ const Post = ({ params }: PostPageTypes) => {
           <ClientOnly>
             <div className="h-full w-full bg-black">
               {isDesktopViewport === false && postById?.video_url ? (
-                <video
-                  ref={mobileVideoRef}
-                  key={postById.video_url}
-                  playsInline
-                  preload="auto"
-                  loop={!isAutoScrollEnabled}
-                  muted={!isSoundEnabled}
-                  onEnded={handleVideoEnded}
-                  onLoadedMetadata={() => initializeDetailVideo(mobileVideoRef.current)}
-                  onPlay={() => pauseOtherVideos(mobileVideoRef.current)}
-                  className="h-full w-full object-contain"
-                  src={useCreateBucketUrl(postById.video_url)}
-                />
+                postIsImage ? (
+                  <ImageSlideshow
+                    key={postById.video_url}
+                    imageIds={postImageIds}
+                    autoPlay
+                    onCycleComplete={handleVideoEnded}
+                    className="h-full w-full"
+                    altPrefix={`${postById.profile.name} image`}
+                  />
+                ) : (
+                  <video
+                    ref={mobileVideoRef}
+                    key={postById.video_url}
+                    playsInline
+                    preload="auto"
+                    loop={!isAutoScrollEnabled}
+                    muted={!isSoundEnabled}
+                    onEnded={handleVideoEnded}
+                    onLoadedMetadata={() => initializeDetailVideo(mobileVideoRef.current)}
+                    onPlay={() => pauseOtherVideos(mobileVideoRef.current)}
+                    className="h-full w-full object-contain"
+                    src={useCreateBucketUrl(postById.video_url)}
+                  />
+                )
               ) : (
                 <div className="h-full bg-black flex items-center justify-center">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white" />
@@ -338,7 +353,7 @@ const Post = ({ params }: PostPageTypes) => {
             </div>
           </ClientOnly>
 
-          {!isSoundEnabled ? (
+          {!postIsImage && !isSoundEnabled ? (
             <button
               onClick={() => enableSound()}
               className="absolute right-4 top-[calc(env(safe-area-inset-top)+12px)] z-30 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
@@ -492,28 +507,42 @@ const Post = ({ params }: PostPageTypes) => {
 
                   {isDesktopViewport === true && postById?.video_url ? (
                     <>
-                    <video
-                      ref={desktopVideoRef}
-                      key={postById.video_url}
-                      controls
-                      preload="auto"
-                      loop={!isAutoScrollEnabled}
-                      muted={!isSoundEnabled}
-                      onEnded={handleVideoEnded}
-                      onLoadedMetadata={() => initializeDetailVideo(desktopVideoRef.current)}
-                      onPlay={() => pauseOtherVideos(desktopVideoRef.current)}
-                      className={desktopVideoClassName}
-                      style={desktopVideoStyle}
-                      src={useCreateBucketUrl(postById.video_url)}
-                    />
-                    {!isSoundEnabled ? (
-                      <button
-                        onClick={() => enableSound()}
-                        className="absolute left-5 top-16 z-30 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
-                      >
-                        Click for sound
-                      </button>
-                    ) : null}
+                    {postIsImage ? (
+                      <ImageSlideshow
+                        key={postById.video_url}
+                        imageIds={postImageIds}
+                        autoPlay
+                        onCycleComplete={handleVideoEnded}
+                        className="h-full max-h-[calc(100dvh-64px)] w-full max-w-[1120px] rounded-sm"
+                        imageClassName="rounded-sm"
+                        altPrefix={`${postById.profile.name} image`}
+                      />
+                    ) : (
+                      <>
+                        <video
+                          ref={desktopVideoRef}
+                          key={postById.video_url}
+                          controls
+                          preload="auto"
+                          loop={!isAutoScrollEnabled}
+                          muted={!isSoundEnabled}
+                          onEnded={handleVideoEnded}
+                          onLoadedMetadata={() => initializeDetailVideo(desktopVideoRef.current)}
+                          onPlay={() => pauseOtherVideos(desktopVideoRef.current)}
+                          className={desktopVideoClassName}
+                          style={desktopVideoStyle}
+                          src={useCreateBucketUrl(postById.video_url)}
+                        />
+                        {!isSoundEnabled ? (
+                          <button
+                            onClick={() => enableSound()}
+                            className="absolute left-5 top-16 z-30 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
+                          >
+                            Click for sound
+                          </button>
+                        ) : null}
+                      </>
+                    )}
                     </>
                   ) : (
                     <div className="h-full bg-black flex items-center justify-center">

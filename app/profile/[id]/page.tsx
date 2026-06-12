@@ -184,7 +184,7 @@ const Profile = ({ params }: ProfilePageTypes) => {
                     onClick={() => setShowLiked(false)} 
                     className={`w-60 text-center py-2 text-[17px] font-semibold cursor-pointer ${!showLiked ? 'border-b-2 border-b-black dark:border-b-white dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}
                 >
-                    Videos
+                    Posts
                 </li>
                 <li 
                     onClick={() => setShowLiked(true)}
@@ -206,7 +206,7 @@ const Profile = ({ params }: ProfilePageTypes) => {
                                 <PostUser key={index} post={post} />
                              ))
                          ) : (
-                             <div className="text-gray-500 font-light text-[15px]">No liked videos yet</div>
+                             <div className="text-gray-500 font-light text-[15px]">No liked posts yet</div>
                          )
                     ) : (
                         postsByUser?.length > 0 ? (
@@ -214,7 +214,7 @@ const Profile = ({ params }: ProfilePageTypes) => {
                                 <PostUser key={index} post={post} />
                             ))
                         ) : (
-                            <div className="text-gray-500 font-light text-[15px]">No videos yet</div>
+                            <div className="text-gray-500 font-light text-[15px]">No posts yet</div>
                         )
                     )}
                 </div>
