@@ -1,6 +1,6 @@
 export const IMAGE_POST_PREFIX = 'images:'
 export const MAX_IMAGE_UPLOAD_COUNT = 10
-export const IMAGE_SLIDE_DURATION_MS = 5000
+export const IMAGE_SLIDE_DURATION_MS = 3000
 
 export type UploadPostMedia =
   | { type: 'video'; file: File }
