@@ -20,7 +20,7 @@ import { useGeneralStore } from '../stores/general'
 import { CommentWithProfile, Like, PostMainCompTypes } from '../types'
 import { pauseOtherVideos, pauseVideosDuringNavigation, rememberVideoPlayback } from '../utils/videoPlayback'
 import { getVideoSoundEnabled, setVideoSoundEnabled, subscribeToVideoSoundPreference } from '../utils/videoSoundPreference'
-import { getImagePostIds, isImagePost } from '../utils/postMedia'
+import { getImagePostAudioId, getImagePostIds, isImagePost } from '../utils/postMedia'
 import ImageSlideshow from './ImageSlideshow'
 import PostMainLikes from './PostMainLikes'
 import VideoOptionsMenu from './VideoOptionsMenu'
@@ -504,6 +504,8 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
 
   const postIsImage = isImagePost(post.video_url)
   const postImageIds = getImagePostIds(post.video_url)
+  const postAudioId = getImagePostAudioId(post.video_url)
+  const hasImageAudio = postIsImage && Boolean(postAudioId)
   const desktopMediaContainerClassName = postIsImage
     ? 'relative flex max-h-[625px] min-h-[420px] w-full max-w-[520px] cursor-pointer items-center overflow-hidden rounded-xl bg-black'
     : 'relative flex max-h-[625px] min-h-[525px] max-w-[295px] cursor-pointer items-center rounded-xl bg-black'
@@ -519,6 +521,8 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
           <div className="relative h-full w-full" onDoubleClick={handleDoubleTapLike}>
             <ImageSlideshow
               imageIds={postImageIds}
+              audioId={postAudioId}
+              muted={!isSoundEnabled}
               autoPlay={isMediaActive}
               onCycleComplete={() => onVideoEnded(post.id)}
               className="h-full w-full"
@@ -563,7 +567,7 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
           </button>
         )}
 
-        {!postIsImage && !isSoundEnabled ? (
+        {(!postIsImage || hasImageAudio) && !isSoundEnabled ? (
           <button
             onClick={(event) => {
               event.preventDefault()
@@ -808,6 +812,8 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
               {postIsImage ? (
                 <ImageSlideshow
                   imageIds={postImageIds}
+                  audioId={postAudioId}
+                  muted={!isSoundEnabled}
                   autoPlay={isMediaActive}
                   onCycleComplete={() => onVideoEnded(post.id)}
                   className="h-full min-h-[420px] w-full rounded-xl"
@@ -828,7 +834,7 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
                   src={useCreateBucketUrl(post.video_url)}
                 />
               )}
-              {!postIsImage && !isSoundEnabled ? (
+              {(!postIsImage || hasImageAudio) && !isSoundEnabled ? (
                 <button
                   onClick={(event) => {
                     event.preventDefault()

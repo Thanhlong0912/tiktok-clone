@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import React, { useEffect, useState } from 'react'
 import { AiOutlineCheckCircle } from "react-icons/ai"
 import { BiImageAdd, BiLoaderCircle, BiSolidCloudUpload, BiVideoPlus } from "react-icons/bi"
+import { ImMusic } from "react-icons/im"
 import { PiKnifeLight } from 'react-icons/pi'
 import ImageSlideshow from '../components/ImageSlideshow'
 import { useUser } from '../context/user'
@@ -24,6 +25,8 @@ const Upload = () => {
     let [caption, setCaption] = useState<string>('');
     let [videoFile, setVideoFile] = useState<File | null>(null);
     let [imageFiles, setImageFiles] = useState<File[]>([]);
+    let [audioFile, setAudioFile] = useState<File | null>(null);
+    let [audioDisplay, setAudioDisplay] = useState<string>('');
     let [error, setError] = useState<UploadError | null>(null);
     let [isUploading, setIsUploading] = useState<boolean>(false);
 
@@ -44,6 +47,14 @@ const Upload = () => {
             imageDisplays.forEach((imageUrl) => URL.revokeObjectURL(imageUrl))
         }
     }, [imageDisplays])
+
+    useEffect(() => {
+        return () => {
+            if (audioDisplay) {
+                URL.revokeObjectURL(audioDisplay)
+            }
+        }
+    }, [audioDisplay])
 
     const onVideoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const files = event.target.files;
@@ -87,11 +98,39 @@ const Upload = () => {
         event.target.value = ''
     }
 
+    const onAudioChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const files = event.target.files
+
+        if (!files || files.length < 1) {
+            event.target.value = ''
+            return
+        }
+
+        const file = files[0]
+        if (!file.type.startsWith('audio/')) {
+            setError({ type: 'File', message: 'Only audio files are supported for music' })
+            event.target.value = ''
+            return
+        }
+
+        setAudioDisplay((previous) => {
+            if (previous) {
+                URL.revokeObjectURL(previous)
+            }
+            return URL.createObjectURL(file)
+        })
+        setAudioFile(file)
+        setError(null)
+        event.target.value = ''
+    }
+
     const discard = () => {
         setVideoDisplay('')
         setVideoFile(null)
         setImageDisplays([])
         setImageFiles([])
+        setAudioFile(null)
+        setAudioDisplay('')
         setCaption('')
         setError(null)
     }
@@ -104,6 +143,11 @@ const Upload = () => {
     const clearImages = () => {
         setImageDisplays([])
         setImageFiles([])
+    }
+
+    const clearAudio = () => {
+        setAudioFile(null)
+        setAudioDisplay('')
     }
 
     const validate = () => {
@@ -133,7 +177,7 @@ const Upload = () => {
 
         const media: UploadPostMedia | null = uploadMode === 'video'
             ? videoFile ? { type: 'video', file: videoFile } : null
-            : { type: 'images', files: imageFiles }
+            : { type: 'images', files: imageFiles, audioFile }
 
         if (!media) return
         setIsUploading(true)
@@ -381,6 +425,7 @@ const Upload = () => {
                                 />
                                 <ImageSlideshow
                                     imageUrls={imageDisplays}
+                                    audioUrl={audioDisplay}
                                     className="absolute z-10 h-full w-full rounded-[34px] p-[13px]"
                                     imageClassName="rounded-[22px]"
                                     altPrefix="Upload preview image"
@@ -422,6 +467,41 @@ const Upload = () => {
                                 </button>
                             </div>
                         </div>
+
+                        {uploadMode === 'images' ? (
+                            <div className="mt-5">
+                                <div className="mb-1 text-[15px] dark:text-white">Music</div>
+                                {audioFile ? (
+                                    <div className="flex items-center justify-between rounded-md border border-gray-200 p-2.5 dark:border-white/10">
+                                        <div className="flex min-w-0 items-center gap-2">
+                                            <ImMusic className="min-w-[18px] text-[#F02C56]" size="18" />
+                                            <span className="truncate text-[13px] dark:text-white">{audioFile.name}</span>
+                                        </div>
+                                        <button
+                                            onClick={clearAudio}
+                                            className="ml-2 text-[13px] font-semibold text-[#F02C56]"
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <label
+                                        htmlFor="audioInput"
+                                        className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-gray-300 p-2.5 text-[13px] text-gray-500 hover:bg-gray-100 dark:border-white/10 dark:text-gray-300 dark:hover:bg-dark"
+                                    >
+                                        <ImMusic size="18" />
+                                        Add music (MP3, WAV, M4A...) — optional
+                                    </label>
+                                )}
+                                <input
+                                    type="file"
+                                    id="audioInput"
+                                    onChange={onAudioChange}
+                                    hidden
+                                    accept="audio/*,.mp3"
+                                />
+                            </div>
+                        ) : null}
 
                         <div className="mt-5">
                             <div className="flex items-center justify-between">

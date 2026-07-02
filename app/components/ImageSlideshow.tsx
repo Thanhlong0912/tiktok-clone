@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { IoChevronBack, IoChevronForward } from 'react-icons/io5'
 import { createBucketUrl } from '../hooks/useCreateBucketUrl'
 import { IMAGE_SLIDE_DURATION_MS } from '../utils/postMedia'
@@ -8,6 +8,9 @@ import { IMAGE_SLIDE_DURATION_MS } from '../utils/postMedia'
 type ImageSlideshowProps = {
   imageIds?: string[]
   imageUrls?: string[]
+  audioId?: string
+  audioUrl?: string
+  muted?: boolean
   className?: string
   imageClassName?: string
   altPrefix?: string
@@ -21,6 +24,9 @@ type ImageSlideshowProps = {
 const ImageSlideshow = ({
   imageIds = [],
   imageUrls = [],
+  audioId = '',
+  audioUrl = '',
+  muted = false,
   className = '',
   imageClassName = '',
   altPrefix = 'Post image',
@@ -31,6 +37,7 @@ const ImageSlideshow = ({
   onCycleComplete,
 }: ImageSlideshowProps) => {
   const [activeIndex, setActiveIndex] = useState<number>(0)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const slides = useMemo(() => {
     if (imageUrls.length > 0) {
@@ -39,6 +46,14 @@ const ImageSlideshow = ({
 
     return imageIds.map((imageId) => createBucketUrl(imageId)).filter(Boolean)
   }, [imageIds, imageUrls])
+
+  const audioSrc = useMemo(() => {
+    if (audioUrl) {
+      return audioUrl
+    }
+
+    return audioId ? createBucketUrl(audioId) : ''
+  }, [audioId, audioUrl])
 
   useEffect(() => {
     setActiveIndex(0)
@@ -71,6 +86,28 @@ const ImageSlideshow = ({
     return () => window.clearTimeout(timer)
   }, [advanceFromTimer, autoPlay, slideDurationMs, slides.length])
 
+  useEffect(() => {
+    const audio = audioRef.current
+
+    if (!audio || !audioSrc) {
+      return
+    }
+
+    audio.muted = muted
+
+    if (autoPlay) {
+      audio.play().catch(() => {
+        if (!audio.muted) {
+          audio.muted = true
+          audio.play().catch(() => null)
+        }
+      })
+    } else {
+      audio.pause()
+      audio.currentTime = 0
+    }
+  }, [audioSrc, autoPlay, muted])
+
   if (slides.length < 1) {
     return (
       <div className={`flex h-full w-full items-center justify-center bg-black text-sm text-white/70 ${className}`}>
@@ -88,6 +125,10 @@ const ImageSlideshow = ({
         alt={`${altPrefix} ${activeIndex + 1}`}
         className={`h-full w-full object-contain ${imageClassName}`}
       />
+
+      {audioSrc ? (
+        <audio ref={audioRef} src={audioSrc} loop preload="auto" />
+      ) : null}
 
       {canNavigate && showControls ? (
         <div className="absolute inset-x-0 bottom-6 z-20 flex justify-center px-5">

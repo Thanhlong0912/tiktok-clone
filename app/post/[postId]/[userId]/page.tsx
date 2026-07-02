@@ -15,7 +15,7 @@ import {
   setVideoAutoScrollEnabled,
   subscribeToVideoAutoScrollPreference,
 } from '@/app/utils/videoAutoScrollPreference'
-import { getImagePostIds, isImagePost } from '@/app/utils/postMedia'
+import { getImagePostAudioId, getImagePostIds, isImagePost } from '@/app/utils/postMedia'
 import {
   clearRememberedVideoPlayback,
   getRememberedVideoPlayback,
@@ -313,6 +313,8 @@ const Post = ({ params }: PostPageTypes) => {
   const desktopVideoStyle = videoAspectRatio ? { aspectRatio: String(videoAspectRatio) } : undefined
   const postIsImage = isImagePost(postById?.video_url)
   const postImageIds = getImagePostIds(postById?.video_url)
+  const postAudioId = getImagePostAudioId(postById?.video_url)
+  const hasImageAudio = postIsImage && Boolean(postAudioId)
 
   return (
     <>
@@ -325,6 +327,8 @@ const Post = ({ params }: PostPageTypes) => {
                   <ImageSlideshow
                     key={postById.video_url}
                     imageIds={postImageIds}
+                    audioId={postAudioId}
+                    muted={!isSoundEnabled}
                     autoPlay
                     onCycleComplete={handleVideoEnded}
                     className="h-full w-full"
@@ -353,7 +357,7 @@ const Post = ({ params }: PostPageTypes) => {
             </div>
           </ClientOnly>
 
-          {!postIsImage && !isSoundEnabled ? (
+          {(!postIsImage || hasImageAudio) && !isSoundEnabled ? (
             <button
               onClick={() => enableSound()}
               className="absolute right-4 top-[calc(env(safe-area-inset-top)+12px)] z-30 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
@@ -508,15 +512,27 @@ const Post = ({ params }: PostPageTypes) => {
                   {isDesktopViewport === true && postById?.video_url ? (
                     <>
                     {postIsImage ? (
+                      <>
                       <ImageSlideshow
                         key={postById.video_url}
                         imageIds={postImageIds}
+                        audioId={postAudioId}
+                        muted={!isSoundEnabled}
                         autoPlay
                         onCycleComplete={handleVideoEnded}
                         className="h-full max-h-[calc(100dvh-64px)] w-full max-w-[1120px] rounded-sm"
                         imageClassName="rounded-sm"
                         altPrefix={`${postById.profile.name} image`}
                       />
+                      {hasImageAudio && !isSoundEnabled ? (
+                        <button
+                          onClick={() => enableSound()}
+                          className="absolute left-5 top-16 z-30 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
+                        >
+                          Click for sound
+                        </button>
+                      ) : null}
+                      </>
                     ) : (
                       <>
                         <video

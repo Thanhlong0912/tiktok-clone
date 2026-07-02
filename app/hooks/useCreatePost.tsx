@@ -20,7 +20,14 @@ const useCreatePost = async (media: UploadPostMedia, userId: string, caption: st
                 uploadedFileIds.push(imageIds[index])
             }
 
-            mediaValue = createImagePostValue(imageIds)
+            let audioId = ''
+            if (media.audioFile) {
+                audioId = createStorageFileId()
+                await storage.createFile(String(process.env.NEXT_PUBLIC_BUCKET_ID), audioId, media.audioFile)
+                uploadedFileIds.push(audioId)
+            }
+
+            mediaValue = createImagePostValue(imageIds, audioId)
         }
 
         await database.createDocument(
