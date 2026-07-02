@@ -201,13 +201,13 @@ const Upload = () => {
   return (
     <>
       <UploadLayout>
-            <div className="w-full mt-[80px] mb-[40px] bg-white dark:bg-medium shadow-lg rounded-md py-6 md:px-10 px-4">
+            <div className="w-full mt-[80px] mb-[40px] bg-surface-elevated shadow-lg rounded-md py-6 md:px-10 px-4">
                 <div>
-                    <h1 className="text-[23px] font-semibold dark:text-white">{modeTitle}</h1>
-                    <h2 className="text-gray-400 mt-1">{modeSubtitle}</h2>
+                    <h1 className="text-[23px] font-semibold text-ink">{modeTitle}</h1>
+                    <h2 className="text-ink-soft mt-1">{modeSubtitle}</h2>
                 </div>
 
-                <div className="mt-6 inline-flex rounded-md border border-gray-200 bg-[#F8F8F8] p-1 dark:border-white/10 dark:bg-dark">
+                <div className="mt-6 inline-flex rounded-md border border-line bg-surface-subtle p-1">
                     <button
                         type="button"
                         onClick={() => {
@@ -216,8 +216,8 @@ const Upload = () => {
                         }}
                         className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-semibold ${
                             uploadMode === 'video'
-                                ? 'bg-white text-[#F02C56] shadow-sm dark:bg-medium'
-                                : 'text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white'
+                                ? 'bg-surface-elevated text-tiktok shadow-sm'
+                                : 'text-ink-soft hover:text-ink'
                         }`}
                     >
                         <BiVideoPlus size="18" />
@@ -231,8 +231,8 @@ const Upload = () => {
                         }}
                         className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-semibold ${
                             uploadMode === 'images'
-                                ? 'bg-white text-[#F02C56] shadow-sm dark:bg-medium'
-                                : 'text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white'
+                                ? 'bg-surface-elevated text-tiktok shadow-sm'
+                                : 'text-ink-soft hover:text-ink'
                         }`}
                     >
                         <BiImageAdd size="18" />
@@ -262,18 +262,18 @@ const Upload = () => {
                                     p-3
                                     border-2
                                     border-dashed
-                                    border-gray-300
+                                    border-line
                                     rounded-lg
-                                    hover:bg-gray-100
+                                    hover:bg-surface-subtle
                                     cursor-pointer
                                 "
                             >
                                 <BiSolidCloudUpload size="40" color="#b3b3b1"/>
-                                <p className="mt-4 text-[17px] dark:text-gray-400">Select video to upload</p>
-                                <p className="mt-1.5 text-gray-500 text-[13px]">Or drag and drop a file</p>
-                                <p className="mt-12 text-gray-400 text-sm">MP4</p>
-                                <p className="mt-2 text-gray-400 text-[13px]">Up to 30 minutes</p>
-                                <p className="mt-2 text-gray-400 text-[13px]">Less than 2 GB</p>
+                                <p className="mt-4 text-[17px] text-ink-soft">Select video to upload</p>
+                                <p className="mt-1.5 text-ink-soft text-[13px]">Or drag and drop a file</p>
+                                <p className="mt-12 text-ink-soft text-sm">MP4</p>
+                                <p className="mt-2 text-ink-soft text-[13px]">Up to 30 minutes</p>
+                                <p className="mt-2 text-ink-soft text-[13px]">Less than 2 GB</p>
                                 <label
                                     htmlFor="videoInput"
                                     className="px-2 py-1.5 mt-8 text-white text-[15px] w-[80%] bg-[#F02C56] rounded-sm cursor-pointer"
@@ -333,12 +333,12 @@ const Upload = () => {
                                     src={videoDisplay}
                                 />
 
-                                <div className="absolute -bottom-12 flex items-center justify-between z-50 rounded-xl border w-full p-2 border-gray-300">
-                                    <div className="flex items-center truncate">
+                                <div className="absolute -bottom-12 flex items-center justify-between z-50 rounded-xl border w-full p-2 border-line">
+                                    <div className="flex items-center truncate text-ink">
                                         <AiOutlineCheckCircle size="16" className="min-w-[16px]"/>
                                         <p className="text-[11px] pl-1 truncate text-ellipsis">{videoFile?.name}</p>
                                     </div>
-                                    <button onClick={() => clearVideo()} className="text-[11px] ml-2 font-semibold">
+                                    <button onClick={() => clearVideo()} className="text-[11px] ml-2 font-semibold text-ink">
                                         Change
                                     </button>
                                 </div>
@@ -363,18 +363,18 @@ const Upload = () => {
                                     p-3
                                     border-2
                                     border-dashed
-                                    border-gray-300
+                                    border-line
                                     rounded-lg
-                                    hover:bg-gray-100
+                                    hover:bg-surface-subtle
                                     cursor-pointer
                                 "
                             >
                                 <BiSolidCloudUpload size="40" color="#b3b3b1"/>
-                                <p className="mt-4 text-[17px] dark:text-gray-400">Select images to upload</p>
-                                <p className="mt-1.5 text-gray-500 text-[13px]">Choose 1 to 10 images</p>
-                                <p className="mt-12 text-gray-400 text-sm">JPG, PNG, WEBP</p>
-                                <p className="mt-2 text-gray-400 text-[13px]">Vertical or horizontal</p>
-                                <p className="mt-2 text-gray-400 text-[13px]">Up to 5 seconds per image</p>
+                                <p className="mt-4 text-[17px] text-ink-soft">Select images to upload</p>
+                                <p className="mt-1.5 text-ink-soft text-[13px]">Choose 1 to 10 images</p>
+                                <p className="mt-12 text-ink-soft text-sm">JPG, PNG, WEBP</p>
+                                <p className="mt-2 text-ink-soft text-[13px]">Vertical or horizontal</p>
+                                <p className="mt-2 text-ink-soft text-[13px]">Up to 5 seconds per image</p>
                                 <label
                                     htmlFor="imageInput"
                                     className="px-2 py-1.5 mt-8 text-white text-[15px] w-[80%] bg-[#F02C56] rounded-sm cursor-pointer"
@@ -431,14 +431,14 @@ const Upload = () => {
                                     altPrefix="Upload preview image"
                                 />
 
-                                <div className="absolute -bottom-12 flex items-center justify-between z-50 rounded-xl border w-full p-2 border-gray-300">
-                                    <div className="flex items-center truncate">
+                                <div className="absolute -bottom-12 flex items-center justify-between z-50 rounded-xl border w-full p-2 border-line">
+                                    <div className="flex items-center truncate text-ink">
                                         <AiOutlineCheckCircle size="16" className="min-w-[16px]"/>
                                         <p className="text-[11px] pl-1 truncate text-ellipsis">
                                             {imageFiles.length} {imageFiles.length === 1 ? 'image' : 'images'} selected
                                         </p>
                                     </div>
-                                    <button onClick={() => clearImages()} className="text-[11px] ml-2 font-semibold">
+                                    <button onClick={() => clearImages()} className="text-[11px] ml-2 font-semibold text-ink">
                                         Change
                                     </button>
                                 </div>
@@ -447,15 +447,15 @@ const Upload = () => {
 
 
                     <div className="mt-4 mb-6 w-full">
-                        <div className="flex bg-[#F8F8F8] py-4 px-6 dark:bg-dark">
+                        <div className="flex bg-surface-subtle py-4 px-6">
                             <div>
-                                <PiKnifeLight className="mr-4 dark:text-white" size="20"/>
+                                <PiKnifeLight className="mr-4 text-ink" size="20"/>
                             </div>
                             <div>
-                                <div className="text-semibold text-[15px] mb-1.5 dark:text-white">
+                                <div className="text-semibold text-[15px] mb-1.5 text-ink">
                                     {uploadMode === 'video' ? 'Divide videos and edit' : 'Show mode preview'}
                                 </div>
-                                <div className="text-semibold text-[13px] text-gray-400">
+                                <div className="text-semibold text-[13px] text-ink-soft">
                                     {uploadMode === 'video'
                                         ? 'You can quickly divide videos into multiple parts, remove redundant parts and turn landscape videos into portrait videos'
                                         : 'Images play as a clickable show, with vertical and horizontal photos fitted inside the viewer'}
@@ -470,16 +470,16 @@ const Upload = () => {
 
                         {uploadMode === 'images' ? (
                             <div className="mt-5">
-                                <div className="mb-1 text-[15px] dark:text-white">Music</div>
+                                <div className="mb-1 text-[15px] text-ink">Music</div>
                                 {audioFile ? (
-                                    <div className="flex items-center justify-between rounded-md border border-gray-200 p-2.5 dark:border-white/10">
+                                    <div className="flex items-center justify-between rounded-md border border-line p-2.5">
                                         <div className="flex min-w-0 items-center gap-2">
-                                            <ImMusic className="min-w-[18px] text-[#F02C56]" size="18" />
-                                            <span className="truncate text-[13px] dark:text-white">{audioFile.name}</span>
+                                            <ImMusic className="min-w-[18px] text-tiktok" size="18" />
+                                            <span className="truncate text-[13px] text-ink">{audioFile.name}</span>
                                         </div>
                                         <button
                                             onClick={clearAudio}
-                                            className="ml-2 text-[13px] font-semibold text-[#F02C56]"
+                                            className="ml-2 text-[13px] font-semibold text-tiktok"
                                         >
                                             Remove
                                         </button>
@@ -487,7 +487,7 @@ const Upload = () => {
                                 ) : (
                                     <label
                                         htmlFor="audioInput"
-                                        className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-gray-300 p-2.5 text-[13px] text-gray-500 hover:bg-gray-100 dark:border-white/10 dark:text-gray-300 dark:hover:bg-dark"
+                                        className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-line p-2.5 text-[13px] text-ink-soft hover:bg-surface-subtle"
                                     >
                                         <ImMusic size="18" />
                                         Add music (MP3, WAV, M4A...) — optional
@@ -505,8 +505,8 @@ const Upload = () => {
 
                         <div className="mt-5">
                             <div className="flex items-center justify-between">
-                                <div className="mb-1 text-[15px] dark:text-white">Caption</div>
-                                <div className="text-gray-400 text-[12px]">{caption.length}/150</div>
+                                <div className="mb-1 text-[15px] text-ink">Caption</div>
+                                <div className="text-ink-soft text-[12px]">{caption.length}/150</div>
                             </div>
                             <input
                                 maxLength={150}
@@ -514,11 +514,12 @@ const Upload = () => {
                                 className="
                                     w-full
                                     border
+                                    border-line
                                     p-2.5
                                     rounded-md
                                     focus:outline-none
-                                    dark:bg-dark
-                                    dark:text-white
+                                    bg-surface
+                                    text-ink
                                 "
                                 value={caption}
                                 onChange={event => setCaption(event.target.value)}
@@ -529,7 +530,7 @@ const Upload = () => {
                             <button
                                 disabled={isUploading}
                                 onClick={() => discard()}
-                                className="px-10 py-2.5 mt-8 border text-[16px] hover:bg-gray-100 dark:text-white dark:hover:text-black rounded-sm"
+                                className="px-10 py-2.5 mt-8 border border-line text-[16px] text-ink hover:bg-surface-subtle rounded-sm"
                             >
                                 Discard
                             </button>

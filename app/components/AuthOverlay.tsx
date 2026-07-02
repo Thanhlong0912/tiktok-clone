@@ -15,18 +15,18 @@ const AuthOverlay = () => {
           id="AuthOverlay"
           className="fixed flex items-center justify-center z-50 top-0 left-0 w-full h-full bg-black bg-opacity-50"
       >
-          <div className="relative bg-white dark:bg-dark w-full max-w-[470px] h-[70%] p-4 rounded-lg">
+          <div className="relative bg-surface w-full max-w-[470px] h-[70%] p-4 rounded-lg">
 
               <div className="w-full flex justify-end">
-                    <button onClick={() => setIsLoginOpen(false)} className="p-1.5 rounded-full bg-gray-100">
+                    <button onClick={() => setIsLoginOpen(false)} className="p-1.5 rounded-full bg-surface-subtle text-ink">
                       <AiOutlineClose size="26"/>
                   </button>
               </div>
 
               {isRegister ? <Register /> : <Login />}
 
-              <div className="absolute flex items-center justify-center py-5 left-0 bottom-0 border-t w-full">
-                  <span className="text-[14px] text-gray-600 dark:text-white">Don’t have an account?</span>
+              <div className="absolute flex items-center justify-center py-5 left-0 bottom-0 border-t border-line w-full">
+                  <span className="text-[14px] text-ink-soft">Don’t have an account?</span>
 
                   <button onClick={() => setIsRegister(isRegister = !isRegister)} className="text-[14px] text-[#F02C56] font-semibold pl-1" >
                       <span>{!isRegister ? 'Register' : 'Log in'}</span>

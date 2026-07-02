@@ -409,7 +409,7 @@ const Post = ({ params }: PostPageTypes) => {
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-44 bg-gradient-to-t from-black/70 via-black/35 to-transparent" />
 
           <div
-            className={`absolute inset-x-0 bottom-0 z-40 overflow-hidden rounded-t-3xl bg-white text-gray-900 transition-[height] duration-300 dark:bg-black dark:text-white ${
+            className={`absolute inset-x-0 bottom-0 z-40 overflow-hidden rounded-t-3xl bg-surface text-ink transition-[height] duration-300 ${
               isMobileSheetExpanded ? 'h-[66dvh]' : 'h-[28dvh]'
             }`}
             style={{
@@ -435,7 +435,7 @@ const Post = ({ params }: PostPageTypes) => {
               >
                 <button
                   onClick={() => setIsMobileSheetExpanded((prev) => !prev)}
-                  className="h-1.5 w-14 rounded-full bg-gray-300 dark:bg-[#4B4D57]"
+                  className="h-1.5 w-14 rounded-full bg-line"
                   aria-label="Toggle details panel"
                 />
               </div>
@@ -454,7 +454,7 @@ const Post = ({ params }: PostPageTypes) => {
                   ) : (
                     <button
                       onClick={() => setIsMobileSheetExpanded(true)}
-                      className="mx-4 mt-2 rounded-xl border border-gray-200 bg-gray-100 py-3 text-sm font-semibold text-gray-700 dark:border-[#2D2F39] dark:bg-[#15161B] dark:text-[#D5D8DF]"
+                      className="mx-4 mt-2 rounded-xl border border-line bg-surface-subtle py-3 text-sm font-semibold text-ink-soft"
                     >
                       View comments ({commentsByPost.length})
                     </button>
@@ -570,7 +570,7 @@ const Post = ({ params }: PostPageTypes) => {
             </ClientOnly>
           </div>
 
-          <div id="InfoSection" className="relative flex h-full min-h-0 w-full flex-col border-l border-gray-200 bg-white dark:border-white/10 dark:bg-black">
+          <div id="InfoSection" className="relative flex h-full min-h-0 w-full flex-col border-l border-line bg-surface">
             <div className="pt-7" />
             <div className="shrink-0">
               <ClientOnly>

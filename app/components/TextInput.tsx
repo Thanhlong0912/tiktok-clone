@@ -8,10 +8,10 @@ const TextInput = ({ string, inputType, placeholder, error, onUpdate }: TextInpu
           className="
               block
               w-full
-              bg-[#F1F1F2]
-              text-gray-800
+              bg-surface-subtle
+              text-ink
               border
-              border-gray-300
+              border-line
               rounded-md
               py-2.5
               px-3

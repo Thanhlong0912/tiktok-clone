@@ -47,24 +47,24 @@ const SingleComment = ({ comment, params }: SingleCommentCompTypes) => {
             <div className="min-w-0">
               <Link
                 href={`/profile/${comment.profile.user_id}`}
-                className="max-w-full truncate text-[17px] font-semibold text-gray-500 hover:underline dark:text-[#9CA0AA]"
+                className="max-w-full truncate text-[17px] font-semibold text-ink-soft hover:underline"
               >
                 {comment?.profile?.name}
               </Link>
 
-              <p className="mt-1 break-words text-[16px] leading-6 text-gray-900 dark:text-white lg:text-[17px]">
+              <p className="mt-1 break-words text-[16px] leading-6 text-ink lg:text-[17px]">
                 {comment.text}
               </p>
 
-              <div className="mt-2 flex items-center gap-4 text-[14px] font-semibold text-gray-500 dark:text-[#9CA0AA]">
+              <div className="mt-2 flex items-center gap-4 text-[14px] font-semibold text-ink-soft">
                 <span>{moment(comment?.created_at).fromNow()}</span>
-                <button className="hover:text-gray-900 dark:hover:text-white">Reply</button>
+                <button className="hover:text-ink">Reply</button>
 
                 {contextUser?.user?.id == comment.profile.user_id ? (
                   <button
                     disabled={isDeleting}
                     onClick={() => deleteThisComment()}
-                    className="inline-flex items-center text-gray-500 hover:text-gray-900 disabled:opacity-60 dark:text-[#9CA0AA] dark:hover:text-white"
+                    className="inline-flex items-center text-ink-soft hover:text-ink disabled:opacity-60"
                   >
                     {isDeleting ? (
                       <BiLoaderCircle className="animate-spin" size="16" />
@@ -76,7 +76,7 @@ const SingleComment = ({ comment, params }: SingleCommentCompTypes) => {
               </div>
             </div>
 
-            <button className="mt-1 inline-flex min-w-[40px] flex-col items-center text-gray-500 hover:text-gray-900 dark:text-[#9CA0AA] dark:hover:text-white">
+            <button className="mt-1 inline-flex min-w-[40px] flex-col items-center text-ink-soft hover:text-ink">
               <AiOutlineHeart size={22} />
               <span className="text-[13px]">0</span>
             </button>

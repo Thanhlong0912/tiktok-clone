@@ -120,7 +120,7 @@ const Profile = ({ params }: ProfilePageTypes) => {
                     {currentProfile ? (
                         <img className="w-[120px] min-w-[120px] rounded-full" src={useCreateBucketUrl(currentProfile?.image)} />
                     ) : (
-                        <div className="min-w-[150px] h-[120px] bg-gray-200 rounded-full" />
+                        <div className="min-w-[150px] h-[120px] bg-surface-subtle rounded-full" />
                     )}
                 </ClientOnly>
 
@@ -128,8 +128,8 @@ const Profile = ({ params }: ProfilePageTypes) => {
                     <ClientOnly>
                         {(currentProfile as User)?.name ? (
                             <div>
-                                <p className="text-[30px] dark:text-white font-bold truncate">{currentProfile?.name}</p>
-                                <p className="text-[18px] dark:text-white truncate">{currentProfile?.name}</p>
+                                <p className="text-[30px] text-ink font-bold truncate">{currentProfile?.name}</p>
+                                <p className="text-[18px] text-ink truncate">{currentProfile?.name}</p>
                             </div>
                         ) : (
                             <div className="h-[60px]" />
@@ -140,7 +140,7 @@ const Profile = ({ params }: ProfilePageTypes) => {
                     {contextUser?.user?.id == params?.id ? (
                         <button
                             onClick={() => setIsEditProfileOpen(isEditProfileOpen = !isEditProfileOpen)}
-                            className="flex item-center rounded-md py-1.5 px-3.5 mt-3 text-[15px] font-semibold border hover:bg-gray-100 dark:hover:bg-medium dark:text-white"
+                            className="flex item-center rounded-md py-1.5 px-3.5 mt-3 text-[15px] font-semibold border border-line hover:bg-surface-subtle text-ink"
                         >
                             <BsPencil className="mt-0.5 mr-1" size="18"/>
                             <span>Edit profile</span>
@@ -161,35 +161,35 @@ const Profile = ({ params }: ProfilePageTypes) => {
 
             <div className="flex items-center pt-4">
                 <div className="mr-4">
-                    <span className="font-bold dark:text-white">{followingCount}</span>
-                    <span className="text-gray-500 dark:text-white font-light text-[15px] pl-1.5">Following</span>
+                    <span className="font-bold text-ink">{followingCount}</span>
+                    <span className="text-ink-soft font-light text-[15px] pl-1.5">Following</span>
                 </div>
                 <div className="mr-4">
-                    <span className="font-bold dark:text-white">{followersCount}</span>
-                    <span className="text-gray-500 dark:text-white font-light text-[15px] pl-1.5">Followers</span>
+                    <span className="font-bold text-ink">{followersCount}</span>
+                    <span className="text-ink-soft font-light text-[15px] pl-1.5">Followers</span>
                 </div>
                 <div className="mr-4">
-                    <span className="font-bold dark:text-white">{likesCount}</span>
-                    <span className="text-gray-500 dark:text-white font-light text-[15px] pl-1.5">Likes</span>
+                    <span className="font-bold text-ink">{likesCount}</span>
+                    <span className="text-ink-soft font-light text-[15px] pl-1.5">Likes</span>
                 </div>
             </div>
 
             <ClientOnly>
-                <p className="pt-4 mr-4 text-gray-500 dark:text-white font-light text-[15px] pl-1.5 max-w-[500px]">
+                <p className="pt-4 mr-4 text-ink-soft font-light text-[15px] pl-1.5 max-w-[500px]">
                     {currentProfile?.bio}
                 </p>
             </ClientOnly>
 
-            <ul className="w-full flex items-center pt-4 border-b">
-                <li 
-                    onClick={() => setShowLiked(false)} 
-                    className={`w-60 text-center py-2 text-[17px] font-semibold cursor-pointer ${!showLiked ? 'border-b-2 border-b-black dark:border-b-white dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}
+            <ul className="w-full flex items-center pt-4 border-b border-line">
+                <li
+                    onClick={() => setShowLiked(false)}
+                    className={`w-60 text-center py-2 text-[17px] font-semibold cursor-pointer ${!showLiked ? 'border-b-2 border-b-ink text-ink' : 'text-ink-soft'}`}
                 >
                     Posts
                 </li>
-                <li 
+                <li
                     onClick={() => setShowLiked(true)}
-                    className={`w-60 text-center py-2 text-[17px] font-semibold cursor-pointer ${showLiked ? 'border-b-2 border-b-black dark:border-b-white dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}
+                    className={`w-60 text-center py-2 text-[17px] font-semibold cursor-pointer ${showLiked ? 'border-b-2 border-b-ink text-ink' : 'text-ink-soft'}`}
                 >
                     Liked
                 </li>
@@ -200,14 +200,14 @@ const Profile = ({ params }: ProfilePageTypes) => {
                     {showLiked ? (
                          isLoadingLiked ? (
                              <div className="flex justify-center items-center h-20 col-span-full">
-                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black dark:border-white"></div>
+                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-ink"></div>
                              </div>
                          ) : likedPosts.length > 0 ? (
                              likedPosts.map((post, index) => (
                                 <PostUser key={index} post={post} />
                              ))
                          ) : (
-                             <div className="text-gray-500 font-light text-[15px]">No liked posts yet</div>
+                             <div className="text-ink-soft font-light text-[15px]">No liked posts yet</div>
                          )
                     ) : (
                         postsByUser?.length > 0 ? (
@@ -215,7 +215,7 @@ const Profile = ({ params }: ProfilePageTypes) => {
                                 <PostUser key={index} post={post} />
                             ))
                         ) : (
-                            <div className="text-gray-500 font-light text-[15px]">No posts yet</div>
+                            <div className="text-ink-soft font-light text-[15px]">No posts yet</div>
                         )
                     )}
                 </div>
