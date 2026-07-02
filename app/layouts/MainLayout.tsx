@@ -13,7 +13,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             <div className={isHome ? 'hidden md:block' : 'block'}>
                 <TopNav />
             </div>
-            <div className={`mx-auto flex w-full justify-between ${isHome ? 'max-w-none px-0 md:max-w-[1140px] md:px-2.5' : 'px-0 lg:px-2.5'}`}>
+            <div className={`mx-auto flex w-full justify-between ${isHome ? 'max-w-none px-0' : 'px-0 lg:px-2.5'}`}>
                 {/* Left rail: desktop/tablet only — mobile uses the bottom nav */}
                 <div className="hidden md:block">
                     <SideNavMain />

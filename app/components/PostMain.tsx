@@ -548,6 +548,11 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
   }, [post.id, post.profile.user_id, rememberCurrentPlayback, router])
 
   const openCommentsSheet = useCallback(async () => {
+    if (isCommentsSheetOpen) {
+      setIsCommentsSheetOpen(false)
+      return
+    }
+
     setIsCommentsSheetOpen(true)
 
     const now = Date.now()
@@ -575,7 +580,7 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
     } finally {
       setIsCommentsLoading(false)
     }
-  }, [applyEngagementSnapshot, post.id])
+  }, [applyEngagementSnapshot, isCommentsSheetOpen, post.id])
 
   useEffect(() => {
     if (!isCommentsSheetOpen) {
@@ -924,7 +929,11 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
       </div>
 
       {/* Desktop / tablet immersive feed */}
-      <div className="hidden h-full w-full items-center justify-center md:flex">
+      <div
+        className={`hidden h-full w-full items-center justify-center transition-[padding] duration-300 ease-out md:flex ${
+          isCommentsSheetOpen ? 'lg:pr-[420px]' : ''
+        }`}
+      >
         <div className="flex h-full items-end gap-3 py-4">
           <div
             className="relative flex h-full max-h-[calc(100vh-92px)] items-center overflow-hidden rounded-2xl bg-black"
@@ -1093,17 +1102,10 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
       </div>
 
       {isCommentsSheetOpen ? (
-        <div className="fixed inset-0 z-[80] hidden md:block">
-          <button
-            onClick={() => setIsCommentsSheetOpen(false)}
-            aria-label="Close comments panel"
-            className="absolute inset-0 bg-black/55"
-          />
-
-          <div className="absolute right-0 top-0 flex h-full w-[460px] max-w-[92vw] flex-col border-l border-gray-200 bg-white text-gray-900 dark:border-white/10 dark:bg-black dark:text-white">
-            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-white/10">
-              <p className="text-[30px] font-semibold tracking-tight">
-                Comments <span className="text-gray-500 dark:text-[#9CA0AA]">{commentsCount}</span>
+        <div className="fixed bottom-0 right-0 top-[60px] z-[35] hidden w-[420px] max-w-[92vw] flex-col border-l border-line bg-surface text-ink shadow-rail md:flex">
+            <div className="flex items-center justify-between border-b border-line px-6 py-4">
+              <p className="text-[22px] font-semibold tracking-tight">
+                Comments <span className="text-ink-soft">{commentsCount}</span>
               </p>
               <button
                 onClick={() => setIsCommentsSheetOpen(false)}
@@ -1147,7 +1149,7 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
               {!user?.id ? (
                 <button
                   onClick={() => setIsLoginOpen(true)}
-                  className="flex w-full items-center justify-center gap-2 rounded-full bg-[#F02C56] py-3 text-[16px] font-semibold text-white hover:bg-[#e61f4b]"
+                  className="flex w-full items-center justify-center gap-2 rounded-full bg-tiktok py-3 text-[16px] font-semibold text-white hover:bg-tiktok-hover"
                 >
                   <FaCommentDots size={18} />
                   Log in to comment
@@ -1158,13 +1160,13 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
                     ref={commentInputRef}
                     value={commentInput}
                     onChange={(event) => setCommentInput(event.target.value)}
-                    className="w-full rounded-full border border-transparent bg-gray-100 px-4 py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-500 focus:border-gray-400 dark:bg-[#161823] dark:text-white dark:placeholder:text-[#9CA0AA] dark:focus:border-[#494A50]"
+                    className="w-full rounded-full border border-transparent bg-surface-subtle px-4 py-2.5 text-sm text-ink outline-none placeholder:text-ink-soft focus:border-line"
                     placeholder="Add comment..."
                   />
                   <button
                     onClick={submitInlineComment}
                     disabled={!commentInput.trim() || isSubmittingComment}
-                    className={`text-sm font-semibold ${commentInput.trim() && !isSubmittingComment ? 'text-[#F02C56]' : 'text-[#6D6E75]'}`}
+                    className={`text-sm font-semibold ${commentInput.trim() && !isSubmittingComment ? 'text-tiktok' : 'text-ink-soft'}`}
                   >
                     {isSubmittingComment ? '...' : 'Post'}
                   </button>
@@ -1172,7 +1174,6 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
               )}
             </div>
           </div>
-        </div>
       ) : null}
     </div>
   )

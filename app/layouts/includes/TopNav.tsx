@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { BiSearch, BiUser } from "react-icons/bi"
 import { AiOutlinePlus } from "react-icons/ai"
 import { BsThreeDotsVertical } from "react-icons/bs"
@@ -16,7 +16,6 @@ import ThemeToggle from './ThemeToggle';
 const TopNav = () => {
   const userContext = useUser()
   const router = useRouter();
-  const pathname = usePathname();
 
   const [searchProfiles, setSearchProfiles] = useState<RandomUsers[]>([])
   const [showMenu, setShowMenu] = useState<boolean>(false)
@@ -53,7 +52,7 @@ const TopNav = () => {
 
   return (
     <div id="TopNav" className="fixed z-30 flex h-[60px] w-full items-center border-b border-line bg-surface">
-      <div className={`mx-auto flex w-full items-center justify-between gap-4 px-4 ${pathname === '/' ? 'max-w-[1150px]' : ''}`}>
+      <div className={`mx-auto flex w-full items-center justify-between gap-4 px-4 `}>
 
         <Link href="/" className="shrink-0">
           <img className="w-[115px] min-w-[115px] dark:hidden" src="/images/tiktok-logo.png" alt="TikTok" />

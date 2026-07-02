@@ -322,7 +322,7 @@ export default function Home() {
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
           onScroll={handleFeedScroll}
-          className="w-full h-[100dvh] overflow-y-scroll snap-y snap-mandatory scroll-smooth no-scrollbar md:mt-[60px] md:h-[calc(100vh-60px)]"
+          className="w-full h-[100dvh] overflow-y-scroll snap-y snap-mandatory scroll-smooth no-scrollbar md:mt-[60px] md:h-[calc(100vh-60px)] lg:pl-[300px]"
         >
           <ClientOnly>
             {displayedPosts.length < 1 ? (
