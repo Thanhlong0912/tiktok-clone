@@ -17,12 +17,21 @@
 
 # misc
 .DS_Store
+Thumbs.db
 *.pem
+
+# editor / IDE
+/.idea/
+/.vscode/
+*.swp
+*.swo
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+*.log
 
 # local env files (never commit secrets)
 .env
