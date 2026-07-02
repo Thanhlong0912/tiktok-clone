@@ -12,6 +12,7 @@ import useGetLikedPosts from "@/app/hooks/useGetLikedPosts"
 import useGetLikesByPostId from "@/app/hooks/useGetLikesByPostId"
 import useIsFollowing from "@/app/hooks/useIsFollowing"
 import MainLayout from "@/app/layouts/MainLayout"
+import MobileBottomNav from "@/app/components/MobileBottomNav"
 import { useGeneralStore } from "@/app/stores/general"
 import { usePostStore } from "@/app/stores/post"
 import { useProfileStore } from "@/app/stores/profile"
@@ -111,9 +112,9 @@ const Profile = ({ params }: ProfilePageTypes) => {
   return (
     <>
       <MainLayout>
-        <div className="pt-[90px] ml-[90px] 2xl:pl-[185px] lg:pl-[160px] lg:pr-0 w-[calc(100%-90px)] pr-3 max-w-[1800px] 2xl:mx-auto">
+        <div className="pt-[76px] md:pt-[90px] ml-0 md:ml-[90px] 2xl:pl-[185px] lg:pl-[160px] lg:pr-0 w-full md:w-[calc(100%-90px)] px-3 md:px-0 md:pr-3 pb-24 md:pb-6 max-w-[1800px] 2xl:mx-auto">
 
-            <div className="flex w-[calc(100vw-230px)]">
+            <div className="flex w-full md:w-[calc(100vw-230px)]">
 
                 <ClientOnly>
                     {currentProfile ? (
@@ -222,6 +223,7 @@ const Profile = ({ params }: ProfilePageTypes) => {
 
             <div className="pb-20" />
         </div>
+        <MobileBottomNav />
     </MainLayout>
     </>
   )

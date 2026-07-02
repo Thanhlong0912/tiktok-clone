@@ -139,11 +139,6 @@ export interface PostMainCompTypes {
   onAutoScrollChange: (enabled: boolean) => void
 }
 
-export interface PostMainLikesCompTypes {
-  post: PostWithProfile
-  onCommentClick?: () => void;
-}
-
 export interface TextInputCompTypes {
   string: string;
   inputType: string;

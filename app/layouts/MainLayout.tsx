@@ -8,16 +8,18 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     const isHome = pathname === '/'
 
     return (
-      	<>
-					<div className={isHome ? 'hidden md:block' : 'block'}>
-						<TopNav/>
-					</div>
-					<div className={`flex justify-between mx-auto w-full ${isHome ? 'max-w-none px-0 md:max-w-[1140px] md:px-2.5' : 'lg:px-2.5 px-0'}`}>
-						<div className={isHome ? 'hidden md:block' : 'block'}>
-							<SideNavMain />
-						</div>
-						{children}
-					</div>
-      	</>
+        <>
+            {/* Top bar: hidden over the immersive mobile feed, shown everywhere else */}
+            <div className={isHome ? 'hidden md:block' : 'block'}>
+                <TopNav />
+            </div>
+            <div className={`mx-auto flex w-full justify-between ${isHome ? 'max-w-none px-0 md:max-w-[1140px] md:px-2.5' : 'px-0 lg:px-2.5'}`}>
+                {/* Left rail: desktop/tablet only — mobile uses the bottom nav */}
+                <div className="hidden md:block">
+                    <SideNavMain />
+                </div>
+                {children}
+            </div>
+        </>
     )
 }

@@ -9,24 +9,24 @@ const MenuItemFollow = ({ user }: MenuItemFollowCompTypes) => {
     <>
       <Link
           href={`/profile/${user?.id}`}
-          className="flex items-center hover:bg-gray-100 dark:hover:bg-medium rounded-md w-full py-1.5 px-2"
+          className="flex items-center rounded-md w-full py-1.5 px-2 transition-colors hover:bg-surface-subtle"
       >
           <img
-              className="rounded-full lg:mx-0 mx-auto"
+              className="h-[35px] w-[35px] rounded-full object-cover lg:mx-0 mx-auto"
               width="35"
               src={useCreateBucketUrl(user?.image)}
           />
-          <div className="lg:pl-2.5 lg:block hidden">
+          <div className="hidden min-w-0 lg:block lg:pl-2.5">
               <div className="flex items-center">
-                  <p className="font-bold text-[14px] truncate dark:text-white">
+                  <p className="truncate text-[14px] font-bold text-ink">
                       {user?.name}
                   </p>
-                  <p className="ml-1 rounded-full bg-[#58D5EC] h-[14px] relative">
-                      <AiOutlineCheck className="relative p-[3px]" color="#FFFFFF" size="15"/>
-                  </p>
+                  <span className="ml-1 inline-flex h-[15px] w-[15px] items-center justify-center rounded-full bg-tiktok-cyan">
+                      <AiOutlineCheck color="#FFFFFF" size="9"/>
+                  </span>
               </div>
-              <p className="font-light text-[12px] text-gray-600 dark:text-white">
-                  {user?.name}
+              <p className="truncate text-[12px] font-light text-ink-soft">
+                  @{user?.name}
               </p>
           </div>
       </Link>

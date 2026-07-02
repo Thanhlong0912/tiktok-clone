@@ -4,14 +4,11 @@ import { useUser } from "@/app/context/user"
 import useGetFollowing from "@/app/hooks/useGetFollowing"
 import { useGeneralStore } from "@/app/stores/general"
 import { usePostStore } from "@/app/stores/post"
-import { useRouter } from "next/navigation"
 import { TouchEvent, UIEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import ClientOnly from "./components/ClientOnly"
 import PostMain from "./components/PostMain"
+import MobileBottomNav from "./components/MobileBottomNav"
 import MainLayout from "./layouts/MainLayout"
-import { AiOutlineHome } from "react-icons/ai"
-import { BiMessageMinus } from "react-icons/bi"
-import { IoAdd, IoCompassOutline, IoPersonOutline } from "react-icons/io5"
 import {
   getVideoAutoScrollEnabled,
   setVideoAutoScrollEnabled,
@@ -21,7 +18,6 @@ import {
 export default function Home() {
   type MobileFeedTab = 'for-you' | 'following'
   const MOBILE_WINDOW_RADIUS = 2
-  const router = useRouter()
   const { user } = useUser() || {}
   const { setIsLoginOpen } = useGeneralStore()
   const [mobileFeedTab, setMobileFeedTab] = useState<MobileFeedTab>('for-you')
@@ -44,6 +40,14 @@ export default function Home() {
   let { allPosts, setAllPosts } = usePostStore();
 
   useEffect(() => { setAllPosts()}, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('feed') === 'following' && user?.id) {
+      setMobileFeedTab('following')
+    }
+  }, [user?.id])
 
   useEffect(() => {
     const hydrateFollowing = async () => {
@@ -107,6 +111,28 @@ export default function Home() {
       isAutoScrollEnabledRef.current = enabled
       setIsAutoScrollEnabled(enabled)
     })
+  }, [])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const container = feedContainerRef.current
+      if (!container) return
+
+      const target = event.target as HTMLElement | null
+      const tag = target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return
+
+      if (event.key === 'ArrowDown' || event.key === 'j') {
+        event.preventDefault()
+        container.scrollBy({ top: container.clientHeight, behavior: 'smooth' })
+      } else if (event.key === 'ArrowUp' || event.key === 'k') {
+        event.preventDefault()
+        container.scrollBy({ top: -container.clientHeight, behavior: 'smooth' })
+      }
+    }
+
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
 
   const saveTabPosition = useCallback((tab: MobileFeedTab) => {
@@ -289,68 +315,14 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="fixed inset-x-0 bottom-0 z-30 md:hidden border-t border-white/20 bg-black/80 px-3 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2 text-white backdrop-blur-sm">
-          <div className="grid grid-cols-5 items-end text-center">
-            <button className="flex flex-col items-center gap-0.5 text-[11px] font-semibold">
-              <AiOutlineHome size={21} />
-              <span>Home</span>
-            </button>
-            <button
-              onClick={() => router.push('/')}
-              className="flex flex-col items-center gap-0.5 text-[11px] opacity-80"
-            >
-              <IoCompassOutline size={21} />
-              <span>Discover</span>
-            </button>
-            <button
-              onClick={() => {
-                if (!user?.id) {
-                  setIsLoginOpen(true)
-                  return
-                }
-                router.push('/upload')
-              }}
-              className="flex justify-center pb-1"
-            >
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/30 bg-white text-black">
-                <IoAdd size={18} />
-              </span>
-            </button>
-            <button
-              onClick={() => {
-                if (!user?.id) {
-                  setIsLoginOpen(true)
-                  return
-                }
-                router.push(`/profile/${user.id}`)
-              }}
-              className="flex flex-col items-center gap-0.5 text-[11px] opacity-80"
-            >
-              <BiMessageMinus size={21} />
-              <span>Inbox</span>
-            </button>
-            <button
-              onClick={() => {
-                if (!user?.id) {
-                  setIsLoginOpen(true)
-                  return
-                }
-                router.push(`/profile/${user.id}`)
-              }}
-              className="flex flex-col items-center gap-0.5 text-[11px] opacity-80"
-            >
-              <IoPersonOutline size={21} />
-              <span>Profile</span>
-            </button>
-          </div>
-        </div>
+        <MobileBottomNav variant="overlay" />
 
         <div
           ref={feedContainerRef}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
           onScroll={handleFeedScroll}
-          className="w-full h-[100dvh] overflow-y-scroll snap-y snap-mandatory scroll-smooth no-scrollbar md:mt-[60px] md:ml-auto md:h-[calc(100vh-60px)] md:max-w-[690px]"
+          className="w-full h-[100dvh] overflow-y-scroll snap-y snap-mandatory scroll-smooth no-scrollbar md:mt-[60px] md:h-[calc(100vh-60px)]"
         >
           <ClientOnly>
             {displayedPosts.length < 1 ? (

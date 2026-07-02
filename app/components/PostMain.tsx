@@ -1,11 +1,18 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AiFillHeart } from 'react-icons/ai'
-import { BsFillPlayFill } from 'react-icons/bs'
+import { AiFillHeart, AiOutlineRetweet } from 'react-icons/ai'
+import { BsFillPlayFill, BsBookmark, BsBookmarkFill } from 'react-icons/bs'
 import { FaCommentDots, FaRegCopy, FaShare } from 'react-icons/fa'
 import { ImMusic } from 'react-icons/im'
 import { IoClose } from 'react-icons/io5'
+import { formatCount } from '../utils/formatNumber'
+import {
+  INTERACTION_EVENT,
+  createInteraction,
+  deleteInteraction,
+  getInteractionsByPost,
+} from '../utils/socialInteractions'
 import { useUser } from '../context/user'
 import useCreateBucketUrl from '../hooks/useCreateBucketUrl'
 import useCreateComment from '../hooks/useCreateComment'
@@ -22,7 +29,6 @@ import { pauseOtherVideos, pauseVideosDuringNavigation, rememberVideoPlayback } 
 import { getVideoSoundEnabled, setVideoSoundEnabled, subscribeToVideoSoundPreference } from '../utils/videoSoundPreference'
 import { getImagePostAudioId, getImagePostIds, isImagePost } from '../utils/postMedia'
 import ImageSlideshow from './ImageSlideshow'
-import PostMainLikes from './PostMainLikes'
 import VideoOptionsMenu from './VideoOptionsMenu'
 
 const followStateByPair = new Map<string, string | null>()
@@ -58,6 +64,7 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
 
   const [followId, setFollowId] = useState<string | null>(null)
   const [isVideoPaused, setIsVideoPaused] = useState<boolean>(false)
+  const [isDesktopPaused, setIsDesktopPaused] = useState<boolean>(false)
   const [showHeartBurst, setShowHeartBurst] = useState<boolean>(false)
   const [likesCount, setLikesCount] = useState<number>(0)
   const [commentsCount, setCommentsCount] = useState<number>(0)
@@ -73,6 +80,16 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
   const [videoPreloadMode, setVideoPreloadMode] = useState<'metadata' | 'auto'>('metadata')
   const [isSoundEnabled, setIsSoundEnabledState] = useState<boolean>(false)
   const [isMediaActive, setIsMediaActive] = useState<boolean>(false)
+
+  const [userSaved, setUserSaved] = useState<boolean>(false)
+  const [saveId, setSaveId] = useState<string | null>(null)
+  const [savesCount, setSavesCount] = useState<number>(0)
+  const [isSaveLoading, setIsSaveLoading] = useState<boolean>(false)
+  const [userReposted, setUserReposted] = useState<boolean>(false)
+  const [repostId, setRepostId] = useState<string | null>(null)
+  const [repostCount, setRepostCount] = useState<number>(0)
+  const [isRepostLoading, setIsRepostLoading] = useState<boolean>(false)
+  const [videoProgress, setVideoProgress] = useState<number>(0)
 
   const applyEngagementSnapshot = useCallback((likes: Like[], comments: CommentWithProfile[]) => {
     setLikesCount(likes.length)
@@ -159,6 +176,104 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
 
     hydrateCounts()
   }, [applyEngagementSnapshot, post.id, user?.id])
+
+  const syncInteractions = useCallback(async () => {
+    try {
+      const [saves, reposts] = await Promise.all([
+        getInteractionsByPost('save', post.id),
+        getInteractionsByPost('repost', post.id),
+      ])
+
+      setSavesCount(saves.length)
+      setRepostCount(reposts.length)
+
+      const mySave = user?.id ? saves.find((s) => s.user_id === user.id) : undefined
+      const myRepost = user?.id ? reposts.find((r) => r.user_id === user.id) : undefined
+      setUserSaved(Boolean(mySave))
+      setSaveId(mySave?.id || null)
+      setUserReposted(Boolean(myRepost))
+      setRepostId(myRepost?.id || null)
+    } catch (error) {
+      console.error(error)
+    }
+  }, [post.id, user?.id])
+
+  useEffect(() => {
+    syncInteractions()
+
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const handler = () => syncInteractions()
+    window.addEventListener(INTERACTION_EVENT, handler)
+    return () => window.removeEventListener(INTERACTION_EVENT, handler)
+  }, [syncInteractions])
+
+  const toggleSave = useCallback(async () => {
+    if (!user?.id) {
+      setIsLoginOpen(true)
+      return
+    }
+    if (isSaveLoading) return
+
+    setIsSaveLoading(true)
+    // optimistic
+    const wasSaved = userSaved
+    setUserSaved(!wasSaved)
+    setSavesCount((c) => Math.max(0, c + (wasSaved ? -1 : 1)))
+    try {
+      if (wasSaved && saveId) {
+        await deleteInteraction('save', saveId)
+        setSaveId(null)
+      } else if (!wasSaved) {
+        const id = await createInteraction('save', user.id, post.id)
+        setSaveId(id)
+      }
+    } catch (error) {
+      console.error(error)
+      // rollback
+      setUserSaved(wasSaved)
+      setSavesCount((c) => Math.max(0, c + (wasSaved ? 1 : -1)))
+    } finally {
+      setIsSaveLoading(false)
+    }
+  }, [isSaveLoading, post.id, saveId, setIsLoginOpen, user?.id, userSaved])
+
+  const toggleRepost = useCallback(async () => {
+    if (!user?.id) {
+      setIsLoginOpen(true)
+      return
+    }
+    if (isRepostLoading) return
+
+    setIsRepostLoading(true)
+    const wasReposted = userReposted
+    setUserReposted(!wasReposted)
+    setRepostCount((c) => Math.max(0, c + (wasReposted ? -1 : 1)))
+    try {
+      if (wasReposted && repostId) {
+        await deleteInteraction('repost', repostId)
+        setRepostId(null)
+      } else if (!wasReposted) {
+        const id = await createInteraction('repost', user.id, post.id)
+        setRepostId(id)
+      }
+    } catch (error) {
+      console.error(error)
+      setUserReposted(wasReposted)
+      setRepostCount((c) => Math.max(0, c + (wasReposted ? 1 : -1)))
+    } finally {
+      setIsRepostLoading(false)
+    }
+  }, [isRepostLoading, post.id, repostId, setIsLoginOpen, user?.id, userReposted])
+
+  const handleVideoProgress = useCallback((event: React.SyntheticEvent<HTMLVideoElement>) => {
+    const video = event.currentTarget
+    if (video.duration > 0) {
+      setVideoProgress((video.currentTime / video.duration) * 100)
+    }
+  }, [])
 
   useEffect(() => {
     const postMainElement = postMainRef.current
@@ -285,6 +400,19 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
 
   const handleDesktopVideoPlay = useCallback(() => {
     pauseOtherVideos(desktopVideoRef.current)
+    setIsDesktopPaused(false)
+  }, [])
+
+  const toggleDesktopPlay = useCallback(() => {
+    const video = desktopVideoRef.current
+    if (!video) return
+
+    if (video.paused) {
+      video.play().then(() => setIsDesktopPaused(false)).catch(() => setIsDesktopPaused(true))
+    } else {
+      video.pause()
+      setIsDesktopPaused(true)
+    }
   }, [])
 
   const syncSoundState = useCallback((enabled: boolean) => {
@@ -506,15 +634,12 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
   const postImageIds = getImagePostIds(post.video_url)
   const postAudioId = getImagePostAudioId(post.video_url)
   const hasImageAudio = postIsImage && Boolean(postAudioId)
-  const desktopMediaContainerClassName = postIsImage
-    ? 'relative flex max-h-[625px] min-h-[420px] w-full max-w-[520px] cursor-pointer items-center overflow-hidden rounded-xl bg-black'
-    : 'relative flex max-h-[625px] min-h-[525px] max-w-[295px] cursor-pointer items-center rounded-xl bg-black'
 
   return (
     <div
       ref={postMainRef}
       data-feed-index={feedIndex}
-      className="snap-start h-[100dvh] md:h-auto md:snap-none"
+      className="snap-start h-[100dvh] md:h-[calc(100vh-60px)]"
     >
       <div className="relative h-full w-full overflow-hidden bg-black md:hidden">
         {postIsImage ? (
@@ -546,6 +671,7 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
               id={`video-${post.id}`}
               loop={!isAutoScrollEnabled}
               onEnded={() => onVideoEnded(post.id)}
+              onTimeUpdate={handleVideoProgress}
               playsInline
               muted={!isSoundEnabled}
               preload={videoPreloadMode}
@@ -586,6 +712,15 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
           className="absolute right-4 top-[calc(env(safe-area-inset-top)+16px)]"
         />
 
+        {!postIsImage ? (
+          <div className="pointer-events-none absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+56px)] z-20 h-[3px] bg-white/20">
+            <div
+              className="h-full bg-white transition-[width] duration-150 ease-linear"
+              style={{ width: `${videoProgress}%` }}
+            />
+          </div>
+        ) : null}
+
         <div className="absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+74px)] z-20 px-4 text-white">
           <div className="mb-2 flex items-center gap-2">
             <img
@@ -617,41 +752,72 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
           </p>
         </div>
 
-        <div className="absolute bottom-[calc(env(safe-area-inset-bottom)+84px)] right-3 z-20 flex w-[68px] flex-col items-center gap-4 text-white">
+        <div className="absolute bottom-[calc(env(safe-area-inset-bottom)+80px)] right-3 z-20 flex w-[60px] flex-col items-center gap-3.5 text-white">
           <button
             onClick={() => router.push(`/profile/${post.profile.user_id}`)}
-            className="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-white bg-black/10"
+            className="relative inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-white bg-black/10"
           >
             <img
-              className="h-10 w-10 rounded-full"
+              className="h-10 w-10 rounded-full object-cover"
               src={useCreateBucketUrl(post.profile.image)}
               alt="Profile"
             />
+            {user?.id !== post.profile.user_id ? (
+              <span
+                onClick={(e) => {
+                  e.stopPropagation()
+                  toggleFollow()
+                }}
+                className={`absolute -bottom-2 left-1/2 flex h-5 w-5 -translate-x-1/2 items-center justify-center rounded-full text-white ${
+                  followId ? 'bg-white/30' : 'bg-tiktok'
+                }`}
+              >
+                {followId ? '✓' : '+'}
+              </span>
+            ) : null}
           </button>
 
           <button onClick={likeOrUnlike} className="flex flex-col items-center text-xs font-semibold">
-            <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm">
-              <AiFillHeart size={30} color={userLiked ? '#ff2d55' : '#ffffff'} />
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm active:scale-90 transition-transform">
+              <AiFillHeart size={30} color={userLiked ? '#fe2c55' : '#ffffff'} className={userLiked ? 'tt-pop' : ''} />
             </span>
-            <span className="mt-1 drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)]">{likesCount}</span>
+            <span className="mt-1 drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)]">{formatCount(likesCount)}</span>
           </button>
 
           <button
             onClick={openCommentsSheet}
             className="flex flex-col items-center text-xs font-semibold"
           >
-            <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm">
-              <FaCommentDots size={27} />
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm">
+              <FaCommentDots size={26} />
             </span>
-            <span className="mt-1 drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)]">{commentsCount}</span>
+            <span className="mt-1 drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)]">{formatCount(commentsCount)}</span>
+          </button>
+
+          <button onClick={toggleSave} className="flex flex-col items-center text-xs font-semibold">
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm active:scale-90 transition-transform">
+              {userSaved ? (
+                <BsBookmarkFill size={24} color="#ffc60a" className="tt-pop" />
+              ) : (
+                <BsBookmark size={24} />
+              )}
+            </span>
+            <span className="mt-1 drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)]">{formatCount(savesCount)}</span>
+          </button>
+
+          <button onClick={toggleRepost} className="flex flex-col items-center text-xs font-semibold">
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm active:scale-90 transition-transform">
+              <AiOutlineRetweet size={26} color={userReposted ? '#25f4ee' : '#ffffff'} />
+            </span>
+            <span className="mt-1 drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)]">{formatCount(repostCount)}</span>
           </button>
 
           <button
             className="flex flex-col items-center text-xs font-semibold"
             onClick={() => setIsShareSheetOpen(true)}
           >
-            <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm">
-              <FaShare size={24} />
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm">
+              <FaShare size={23} />
             </span>
             <span className="mt-1 drop-shadow-[0_1px_2px_rgba(0,0,0,0.75)]">Share</span>
           </button>
@@ -757,104 +923,171 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
         ) : null}
       </div>
 
-      <div className="hidden border-b px-4 py-6 md:flex">
-        <div className="cursor-pointer">
-          <img
-            className="max-h-[60px] rounded-full"
-            width="60"
-            src={useCreateBucketUrl(post?.profile?.image)}
-            alt="Profile"
-          />
-        </div>
+      {/* Desktop / tablet immersive feed */}
+      <div className="hidden h-full w-full items-center justify-center md:flex">
+        <div className="flex h-full items-end gap-3 py-4">
+          <div
+            className="relative flex h-full max-h-[calc(100vh-92px)] items-center overflow-hidden rounded-2xl bg-black"
+            style={{ aspectRatio: '9 / 16' }}
+          >
+            <VideoOptionsMenu
+              isAutoScrollEnabled={isAutoScrollEnabled}
+              onAutoScrollChange={onAutoScrollChange}
+              className="absolute right-3 top-3"
+            />
 
-        <div className="flex h-full w-full flex-col px-2">
-          <div className="flex items-center justify-between pb-0.5">
-            <Link
-              href={`/profile/${post.profile.user_id}`}
-              className="cursor-pointer font-bold hover:underline dark:text-white"
-            >
-              {post.profile.name}
-            </Link>
-            {user?.id !== post.profile.user_id && (
-              <button
-                onClick={toggleFollow}
-                className={`mt-3 flex items-center rounded-md px-8 py-1.5 text-[15px] font-semibold ${
-                  followId
-                    ? 'border border-gray-300 bg-white text-gray-800 hover:bg-gray-100 dark:bg-black dark:text-gray-200 dark:hover:bg-gray-800'
-                    : 'bg-rose-500 text-white hover:bg-rose-600'
-                }`}
-              >
-                {followId ? 'Following' : 'Follow'}
-              </button>
-            )}
-          </div>
-
-          <p className="max-w-[300px] break-words pb-0.5 text-[15px] dark:text-white md:max-w-[400px]">
-            {post.text}
-          </p>
-          <p className="pb-0.5 text-[14px] text-gray-500 dark:text-gray-300">#longbi #longkhongmap #longbabe</p>
-          <p className="flex items-center pb-0.5 text-[14px] font-semibold dark:text-white">
-            <ImMusic size="17" />
-            <span className="truncate px-1 text-[13px]">original sound - {post.profile.name}</span>
-            <AiFillHeart size="20" />
-          </p>
-
-          <div className="mt-2.5 flex flex-1">
-            <div
-              onClick={openPostDetail}
-              className={desktopMediaContainerClassName}
-            >
-              <VideoOptionsMenu
-                isAutoScrollEnabled={isAutoScrollEnabled}
-                onAutoScrollChange={onAutoScrollChange}
-                className="absolute right-3 top-3"
-              />
-              {postIsImage ? (
+            {postIsImage ? (
+              <div className="h-full w-full" onDoubleClick={handleDoubleTapLike}>
                 <ImageSlideshow
                   imageIds={postImageIds}
                   audioId={postAudioId}
                   muted={!isSoundEnabled}
                   autoPlay={isMediaActive}
                   onCycleComplete={() => onVideoEnded(post.id)}
-                  className="h-full min-h-[420px] w-full rounded-xl"
-                  imageClassName="rounded-xl"
+                  className="h-full w-full"
                   altPrefix={`${post.profile.name} image`}
                 />
-              ) : (
+              </div>
+            ) : (
+              <>
                 <video
                   ref={desktopVideoRef}
                   id={`video-desktop-${post.id}`}
                   loop={!isAutoScrollEnabled}
-                  controls
                   muted={!isSoundEnabled}
                   onEnded={() => onVideoEnded(post.id)}
                   onPlay={handleDesktopVideoPlay}
+                  onPause={() => setIsDesktopPaused(true)}
+                  onTimeUpdate={handleVideoProgress}
+                  onClick={toggleDesktopPlay}
+                  onDoubleClick={handleDoubleTapLike}
                   preload={videoPreloadMode}
-                  className="mx-auto h-full rounded-xl object-cover"
+                  className="h-full w-full cursor-pointer object-cover"
                   src={useCreateBucketUrl(post.video_url)}
                 />
-              )}
-              {(!postIsImage || hasImageAudio) && !isSoundEnabled ? (
-                <button
-                  onClick={(event) => {
-                    event.preventDefault()
-                    event.stopPropagation()
-                    enableSound()
-                  }}
-                  className="absolute left-3 top-3 z-30 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
-                >
-                  Click for sound
-                </button>
-              ) : null}
-              <img
-                className="absolute bottom-10 right-2"
-                width="90"
-                src="/images/tiktok-logo-white.png"
-                alt="Logo"
-              />
+                {isDesktopPaused ? (
+                  <button
+                    onClick={toggleDesktopPlay}
+                    className="pointer-events-auto absolute left-1/2 top-1/2 z-10 inline-flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm"
+                  >
+                    <BsFillPlayFill size={34} />
+                  </button>
+                ) : null}
+              </>
+            )}
+
+            {showHeartBurst ? (
+              <AiFillHeart className="heart-pop pointer-events-none absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 text-[110px] text-white/95" />
+            ) : null}
+
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
+
+            <div className="absolute inset-x-0 bottom-0 z-10 p-5 text-white">
+              <div className="mb-2 flex items-center gap-2">
+                <Link href={`/profile/${post.profile.user_id}`} className="text-[17px] font-bold hover:underline">
+                  @{post.profile.name}
+                </Link>
+                {user?.id !== post.profile.user_id ? (
+                  <button
+                    onClick={toggleFollow}
+                    className={`rounded-md border px-3 py-1 text-[13px] font-semibold ${
+                      followId ? 'border-white/70 bg-white/10' : 'border-white bg-white text-black'
+                    }`}
+                  >
+                    {followId ? 'Following' : 'Follow'}
+                  </button>
+                ) : null}
+              </div>
+              <p className="line-clamp-2 max-w-[86%] text-[14px] leading-5 text-white/95">{post.text}</p>
+              <p className="mt-2 flex items-center text-[13px] font-medium text-white/90">
+                <ImMusic size={14} />
+                <span className="ml-1.5 truncate">original sound - {post.profile.name}</span>
+              </p>
             </div>
 
-            <PostMainLikes post={post} onCommentClick={openCommentsSheet} />
+            {(!postIsImage || hasImageAudio) && !isSoundEnabled ? (
+              <button
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  enableSound()
+                }}
+                className="absolute left-3 top-3 z-30 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
+              >
+                Click for sound
+              </button>
+            ) : null}
+
+            {!postIsImage ? (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-1 bg-white/25">
+                <div
+                  className="h-full bg-white transition-[width] duration-150 ease-linear"
+                  style={{ width: `${videoProgress}%` }}
+                />
+              </div>
+            ) : null}
+          </div>
+
+          {/* Action rail */}
+          <div className="flex flex-col items-center gap-4 pb-3 text-ink">
+            <button
+              onClick={() => router.push(`/profile/${post.profile.user_id}`)}
+              className="relative mb-1 inline-flex h-12 w-12 items-center justify-center rounded-full"
+            >
+              <img
+                className="h-12 w-12 rounded-full object-cover"
+                src={useCreateBucketUrl(post.profile.image)}
+                alt={post.profile.name}
+              />
+              {user?.id !== post.profile.user_id ? (
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleFollow()
+                  }}
+                  className={`absolute -bottom-2 left-1/2 flex h-5 w-5 -translate-x-1/2 items-center justify-center rounded-full text-[13px] text-white ${
+                    followId ? 'bg-ink-soft' : 'bg-tiktok'
+                  }`}
+                >
+                  {followId ? '✓' : '+'}
+                </span>
+              ) : null}
+            </button>
+
+            <button onClick={likeOrUnlike} className="flex flex-col items-center gap-1">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-subtle transition-transform active:scale-90">
+                <AiFillHeart size={26} color={userLiked ? '#fe2c55' : undefined} className={userLiked ? 'tt-pop' : ''} />
+              </span>
+              <span className="text-xs font-semibold">{formatCount(likesCount)}</span>
+            </button>
+
+            <button onClick={openCommentsSheet} className="flex flex-col items-center gap-1">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-subtle">
+                <FaCommentDots size={24} />
+              </span>
+              <span className="text-xs font-semibold">{formatCount(commentsCount)}</span>
+            </button>
+
+            <button onClick={toggleSave} className="flex flex-col items-center gap-1">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-subtle transition-transform active:scale-90">
+                {userSaved ? <BsBookmarkFill size={22} color="#ffc60a" className="tt-pop" /> : <BsBookmark size={22} />}
+              </span>
+              <span className="text-xs font-semibold">{formatCount(savesCount)}</span>
+            </button>
+
+            <button onClick={toggleRepost} className="flex flex-col items-center gap-1">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-subtle transition-transform active:scale-90">
+                <AiOutlineRetweet size={24} color={userReposted ? '#25c2c2' : undefined} />
+              </span>
+              <span className="text-xs font-semibold">{formatCount(repostCount)}</span>
+            </button>
+
+            <button onClick={copyPostLink} className="flex flex-col items-center gap-1">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-subtle">
+                <FaShare size={22} />
+              </span>
+              <span className="text-xs font-semibold">Share</span>
+            </button>
           </div>
         </div>
       </div>
