@@ -1,30 +1,47 @@
 import { database, storage, ID } from "@/libs/AppWriteClient"
 import { createImagePostValue, createStorageFileId, UploadPostMedia } from "../utils/postMedia"
 
-const useCreatePost = async (media: UploadPostMedia, userId: string, caption: string) => {
+const useCreatePost = async (
+    media: UploadPostMedia,
+    userId: string,
+    caption: string,
+    onProgress?: (percent: number) => void
+) => {
     const uploadedFileIds: string[] = []
+    const bucketId = String(process.env.NEXT_PUBLIC_BUCKET_ID)
+
+    const totalFiles = media.type === 'video'
+        ? 1
+        : media.files.length + (media.audioFile ? 1 : 0)
+    let completedFiles = 0
+
+    const uploadFile = async (fileId: string, file: File) => {
+        await storage.createFile(bucketId, fileId, file, undefined, (progress) => {
+            onProgress?.(Math.round(((completedFiles + progress.progress / 100) / totalFiles) * 100))
+        })
+        completedFiles += 1
+        onProgress?.(Math.round((completedFiles / totalFiles) * 100))
+        uploadedFileIds.push(fileId)
+    }
 
     try {
         let mediaValue = ''
 
         if (media.type === 'video') {
             const videoId = createStorageFileId()
-            await storage.createFile(String(process.env.NEXT_PUBLIC_BUCKET_ID), videoId, media.file)
-            uploadedFileIds.push(videoId)
+            await uploadFile(videoId, media.file)
             mediaValue = videoId
         } else {
             const imageIds = media.files.map(() => createStorageFileId())
 
             for (let index = 0; index < media.files.length; index += 1) {
-                await storage.createFile(String(process.env.NEXT_PUBLIC_BUCKET_ID), imageIds[index], media.files[index])
-                uploadedFileIds.push(imageIds[index])
+                await uploadFile(imageIds[index], media.files[index])
             }
 
             let audioId = ''
             if (media.audioFile) {
                 audioId = createStorageFileId()
-                await storage.createFile(String(process.env.NEXT_PUBLIC_BUCKET_ID), audioId, media.audioFile)
-                uploadedFileIds.push(audioId)
+                await uploadFile(audioId, media.audioFile)
             }
 
             mediaValue = createImagePostValue(imageIds, audioId)

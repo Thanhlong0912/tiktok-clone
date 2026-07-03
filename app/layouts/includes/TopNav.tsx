@@ -18,6 +18,7 @@ const TopNav = () => {
   const router = useRouter();
 
   const [searchProfiles, setSearchProfiles] = useState<RandomUsers[]>([])
+  const [searchQuery, setSearchQuery] = useState<string>('')
   const [showMenu, setShowMenu] = useState<boolean>(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
   let { setIsLoginOpen, setIsEditProfileOpen } = useGeneralStore()
@@ -62,9 +63,19 @@ const TopNav = () => {
         <div className="relative hidden w-full max-w-[430px] items-center rounded-full bg-surface-subtle md:flex">
           <input
             type="text"
-            onChange={handleSearchName}
+            value={searchQuery}
+            onChange={(event) => {
+              setSearchQuery(event.target.value)
+              handleSearchName(event)
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && searchQuery.trim()) {
+                setSearchProfiles([])
+                router.push(`/explore?q=${encodeURIComponent(searchQuery.trim())}`)
+              }
+            }}
             className="w-full bg-transparent py-2.5 pl-4 text-[15px] text-ink placeholder-ink-soft focus:outline-none"
-            placeholder="Search accounts"
+            placeholder="Search accounts and videos"
           />
 
           {searchProfiles.length > 0 ? (
@@ -73,12 +84,23 @@ const TopNav = () => {
                 <Link
                   key={profile.id}
                   href={`/profile/${profile?.id}`}
+                  onClick={() => setSearchProfiles([])}
                   className="flex items-center gap-2.5 px-3 py-2 hover:bg-surface-subtle"
                 >
                   <img className="h-9 w-9 rounded-full object-cover" src={useCreateBucketUrl(profile?.image)} alt={profile?.name} />
                   <span className="truncate text-[15px] font-medium text-ink">@{profile?.name}</span>
                 </Link>
               ))}
+              <button
+                onClick={() => {
+                  setSearchProfiles([])
+                  router.push(`/explore?q=${encodeURIComponent(searchQuery.trim())}`)
+                }}
+                className="flex w-full items-center gap-2.5 border-t border-line px-3 py-2.5 text-[14px] font-semibold text-tiktok hover:bg-surface-subtle"
+              >
+                <BiSearch size={17} />
+                View all results for “{searchQuery.trim()}”
+              </button>
             </div>
           ) : null}
 

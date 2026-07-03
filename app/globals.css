@@ -167,6 +167,26 @@ body {
   animation: tt-spin-disc 4s linear infinite;
 }
 
+@keyframes tt-shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+
+.tt-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--tt-bg-subtle) 25%,
+    var(--tt-border) 50%,
+    var(--tt-bg-subtle) 75%
+  );
+  background-size: 800px 100%;
+  animation: tt-shimmer 1.4s linear infinite;
+}
+
 @keyframes tt-marquee {
   0% {
     transform: translateX(0);

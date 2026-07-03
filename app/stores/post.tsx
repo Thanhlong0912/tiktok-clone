@@ -9,6 +9,8 @@ interface PostStore {
     allPosts: PostWithProfile[];
     postsByUser: Post[];
     postById: PostWithProfile | null;
+    isFeedLoading: boolean;
+    feedError: boolean;
     setAllPosts: () => void;
     setPostsByUser: (userId: string) => void;
     setPostById: (postId: string) => void;
@@ -21,10 +23,18 @@ export const usePostStore = create<PostStore>()(
                 allPosts: [],
                 postsByUser: [],
                 postById: null,
+                isFeedLoading: false,
+                feedError: false,
 
                 setAllPosts: async () => {
-                    const result = await useGetAllPosts()
-                    set({ allPosts: result });
+                    set({ isFeedLoading: true, feedError: false });
+                    try {
+                        const result = await useGetAllPosts()
+                        set({ allPosts: result, isFeedLoading: false });
+                    } catch (error) {
+                        console.error(error)
+                        set({ isFeedLoading: false, feedError: true });
+                    }
                 },
                 setPostsByUser: async (userId: string) => {
                     const result = await useGetPostsByUser(userId)
@@ -46,7 +56,12 @@ export const usePostStore = create<PostStore>()(
             }),
             {
                 name: 'store',
-                storage: createJSONStorage(() => localStorage)
+                storage: createJSONStorage(() => localStorage),
+                partialize: (state) => ({
+                    allPosts: state.allPosts,
+                    postsByUser: state.postsByUser,
+                    postById: state.postById,
+                }),
             }
         )
     )

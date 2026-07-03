@@ -12,8 +12,11 @@ import useCreatePost from '../hooks/useCreatePost'
 import UploadLayout from '../layouts/UploadLayout'
 import { UploadError } from '../types'
 import { MAX_IMAGE_UPLOAD_COUNT, UploadPostMedia } from '../utils/postMedia'
+import { showToast } from '../utils/toast'
 
 type UploadMode = 'video' | 'images'
+
+const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
 
 const Upload = () => {
     const contextUser = useUser()
@@ -29,6 +32,8 @@ const Upload = () => {
     let [audioDisplay, setAudioDisplay] = useState<string>('');
     let [error, setError] = useState<UploadError | null>(null);
     let [isUploading, setIsUploading] = useState<boolean>(false);
+    let [uploadProgress, setUploadProgress] = useState<number>(0);
+    let [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
 
     useEffect(() => {
         if (!contextUser?.user) router.push('/')
@@ -56,15 +61,65 @@ const Upload = () => {
         }
     }, [audioDisplay])
 
+    const applyVideoFile = (file: File) => {
+        if (!file.type.startsWith('video/')) {
+            setError({ type: 'File', message: 'Only video files are supported' })
+            return
+        }
+
+        if (file.size > MAX_VIDEO_SIZE_BYTES) {
+            setError({ type: 'File', message: 'Videos must be smaller than 2 GB' })
+            return
+        }
+
+        setVideoDisplay(URL.createObjectURL(file))
+        setVideoFile(file)
+        setError(null)
+    }
+
+    const applyImageFiles = (selectedFiles: File[]) => {
+        if (selectedFiles.length > MAX_IMAGE_UPLOAD_COUNT) {
+            setError({ type: 'File', message: `You can upload up to ${MAX_IMAGE_UPLOAD_COUNT} images` })
+            return
+        }
+
+        const validImages = selectedFiles.filter((file) => file.type.startsWith('image/'))
+        if (validImages.length !== selectedFiles.length) {
+            setError({ type: 'File', message: 'Only image files are supported' })
+            return
+        }
+
+        setImageDisplays(validImages.map((file) => URL.createObjectURL(file)))
+        setImageFiles(validImages)
+        setError(null)
+    }
+
+    const onDropZoneDragOver = (event: React.DragEvent<HTMLElement>) => {
+        event.preventDefault()
+        setIsDraggingOver(true)
+    }
+
+    const onDropZoneDragLeave = () => setIsDraggingOver(false)
+
+    const onDropZoneDrop = (event: React.DragEvent<HTMLElement>) => {
+        event.preventDefault()
+        setIsDraggingOver(false)
+
+        const droppedFiles = Array.from(event.dataTransfer.files || [])
+        if (droppedFiles.length < 1) return
+
+        if (uploadMode === 'video') {
+            applyVideoFile(droppedFiles[0])
+        } else {
+            applyImageFiles(droppedFiles)
+        }
+    }
+
     const onVideoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const files = event.target.files;
 
         if (files && files.length > 0) {
-            const file = files[0];
-            const fileUrl = URL.createObjectURL(file);
-            setVideoDisplay(fileUrl);
-            setVideoFile(file);
-            setError(null)
+            applyVideoFile(files[0])
         }
 
         event.target.value = ''
@@ -78,23 +133,7 @@ const Upload = () => {
             return
         }
 
-        if (selectedFiles.length > MAX_IMAGE_UPLOAD_COUNT) {
-            setError({ type: 'File', message: `You can upload up to ${MAX_IMAGE_UPLOAD_COUNT} images` })
-            event.target.value = ''
-            return
-        }
-
-        const validImages = selectedFiles.filter((file) => file.type.startsWith('image/'))
-        if (validImages.length !== selectedFiles.length) {
-            setError({ type: 'File', message: 'Only image files are supported' })
-            event.target.value = ''
-            return
-        }
-
-        const imageUrls = validImages.map((file) => URL.createObjectURL(file))
-        setImageDisplays(imageUrls)
-        setImageFiles(validImages)
-        setError(null)
+        applyImageFiles(selectedFiles)
         event.target.value = ''
     }
 
@@ -181,15 +220,17 @@ const Upload = () => {
 
         if (!media) return
         setIsUploading(true)
+        setUploadProgress(0)
 
         try {
-            await useCreatePost(media, contextUser?.user?.id, caption.trim())
+            await useCreatePost(media, contextUser?.user?.id, caption.trim(), setUploadProgress)
+            showToast('Your post is live!')
             router.push(`/profile/${contextUser?.user?.id}`)
             setIsUploading(false)
         } catch (error) {
             console.log(error)
             setIsUploading(false)
-            alert(error)
+            showToast('Upload failed. Please try again.', 'error')
         }
     }
 
@@ -246,7 +287,10 @@ const Upload = () => {
                         !videoDisplay ?
                             <label
                                 htmlFor="videoInput"
-                                className="
+                                onDragOver={onDropZoneDragOver}
+                                onDragLeave={onDropZoneDragLeave}
+                                onDrop={onDropZoneDrop}
+                                className={`
                                     md:mx-0
                                     mx-auto
                                     mt-4
@@ -262,11 +306,11 @@ const Upload = () => {
                                     p-3
                                     border-2
                                     border-dashed
-                                    border-line
                                     rounded-lg
                                     hover:bg-surface-subtle
                                     cursor-pointer
-                                "
+                                    ${isDraggingOver ? 'border-tiktok bg-surface-subtle' : 'border-line'}
+                                `}
                             >
                                 <BiSolidCloudUpload size="40" color="#b3b3b1"/>
                                 <p className="mt-4 text-[17px] text-ink-soft">Select video to upload</p>
@@ -285,7 +329,7 @@ const Upload = () => {
                                     id="videoInput"
                                     onChange={onVideoChange}
                                     hidden
-                                    accept=".mp4,video/mp4"
+                                    accept="video/*"
                                 />
                             </label>
                         :
@@ -309,10 +353,13 @@ const Upload = () => {
                                 "
                             >
                                 {isUploading ? (
-                                    <div className="absolute flex items-center justify-center z-20 bg-black h-full w-full rounded-[50px] bg-opacity-50">
+                                    <div className="absolute flex flex-col items-center justify-center z-20 bg-black h-full w-full rounded-[50px] bg-opacity-50 px-8">
                                         <div className="mx-auto flex items-center justify-center gap-1">
                                             <BiLoaderCircle className="animate-spin" color="#F12B56" size={30} />
-                                            <div className="text-white font-bold">Uploading...</div>
+                                            <div className="text-white font-bold">Uploading {uploadProgress}%</div>
+                                        </div>
+                                        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/25">
+                                            <div className="h-full bg-tiktok transition-[width]" style={{ width: `${uploadProgress}%` }} />
                                         </div>
                                     </div>
                                 ) : null}
@@ -347,7 +394,10 @@ const Upload = () => {
                         imageDisplays.length < 1 ?
                             <label
                                 htmlFor="imageInput"
-                                className="
+                                onDragOver={onDropZoneDragOver}
+                                onDragLeave={onDropZoneDragLeave}
+                                onDrop={onDropZoneDrop}
+                                className={`
                                     md:mx-0
                                     mx-auto
                                     mt-4
@@ -363,11 +413,11 @@ const Upload = () => {
                                     p-3
                                     border-2
                                     border-dashed
-                                    border-line
                                     rounded-lg
                                     hover:bg-surface-subtle
                                     cursor-pointer
-                                "
+                                    ${isDraggingOver ? 'border-tiktok bg-surface-subtle' : 'border-line'}
+                                `}
                             >
                                 <BiSolidCloudUpload size="40" color="#b3b3b1"/>
                                 <p className="mt-4 text-[17px] text-ink-soft">Select images to upload</p>
@@ -411,10 +461,13 @@ const Upload = () => {
                                 "
                             >
                                 {isUploading ? (
-                                    <div className="absolute flex items-center justify-center z-30 bg-black h-full w-full rounded-[50px] bg-opacity-50">
+                                    <div className="absolute flex flex-col items-center justify-center z-30 bg-black h-full w-full rounded-[50px] bg-opacity-50 px-8">
                                         <div className="mx-auto flex items-center justify-center gap-1">
                                             <BiLoaderCircle className="animate-spin" color="#F12B56" size={30} />
-                                            <div className="text-white font-bold">Uploading...</div>
+                                            <div className="text-white font-bold">Uploading {uploadProgress}%</div>
+                                        </div>
+                                        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/25">
+                                            <div className="h-full bg-tiktok transition-[width]" style={{ width: `${uploadProgress}%` }} />
                                         </div>
                                     </div>
                                 ) : null}
@@ -539,7 +592,12 @@ const Upload = () => {
                                 onClick={() => createNewPost()}
                                 className="px-10 py-2.5 mt-8 border text-[16px] text-white bg-[#F02C56] rounded-sm"
                             >
-                                {isUploading ? <BiLoaderCircle className="animate-spin" color="#ffffff" size={25} /> : 'Post'}
+                                {isUploading ? (
+                                    <span className="flex items-center gap-2">
+                                        <BiLoaderCircle className="animate-spin" color="#ffffff" size={22} />
+                                        {uploadProgress}%
+                                    </span>
+                                ) : 'Post'}
                             </button>
                         </div>
 

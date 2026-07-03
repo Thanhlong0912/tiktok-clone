@@ -7,6 +7,7 @@ import { usePostStore } from "@/app/stores/post"
 import { TouchEvent, UIEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import ClientOnly from "./components/ClientOnly"
 import PostMain from "./components/PostMain"
+import PostSkeleton from "./components/PostSkeleton"
 import MobileBottomNav from "./components/MobileBottomNav"
 import MainLayout from "./layouts/MainLayout"
 import {
@@ -14,6 +15,7 @@ import {
   setVideoAutoScrollEnabled,
   subscribeToVideoAutoScrollPreference,
 } from "./utils/videoAutoScrollPreference"
+import { getVideoSoundEnabled, setVideoSoundEnabled } from "./utils/videoSoundPreference"
 
 export default function Home() {
   type MobileFeedTab = 'for-you' | 'following'
@@ -37,7 +39,7 @@ export default function Home() {
     'for-you': { scrollTop: 0, visibleIndex: 0 },
     'following': { scrollTop: 0, visibleIndex: 0 },
   })
-  let { allPosts, setAllPosts } = usePostStore();
+  let { allPosts, setAllPosts, isFeedLoading, feedError } = usePostStore();
 
   useEffect(() => { setAllPosts()}, [])
 
@@ -128,6 +130,9 @@ export default function Home() {
       } else if (event.key === 'ArrowUp' || event.key === 'k') {
         event.preventDefault()
         container.scrollBy({ top: -container.clientHeight, behavior: 'smooth' })
+      } else if (event.key === 'm') {
+        event.preventDefault()
+        setVideoSoundEnabled(!getVideoSoundEnabled())
       }
     }
 
@@ -325,9 +330,22 @@ export default function Home() {
           className="w-full h-[100dvh] overflow-y-scroll snap-y snap-mandatory scroll-smooth no-scrollbar md:mt-[60px] md:h-[calc(100vh-60px)] lg:pl-[300px]"
         >
           <ClientOnly>
-            {displayedPosts.length < 1 ? (
+            {displayedPosts.length < 1 && isFeedLoading ? (
+              <PostSkeleton />
+            ) : displayedPosts.length < 1 ? (
               <div className="flex h-[100dvh] snap-start items-center justify-center bg-black px-8 text-center text-white md:h-[calc(100vh-60px)] md:bg-transparent md:text-black dark:md:text-white">
-                {mobileFeedTab === 'following' ? (
+                {feedError && mobileFeedTab === 'for-you' ? (
+                  <div>
+                    <p className="text-lg font-semibold">Couldn&apos;t load the feed.</p>
+                    <p className="mt-2 text-sm text-white/80 md:text-gray-500">Check your connection and try again.</p>
+                    <button
+                      onClick={() => setAllPosts()}
+                      className="mt-4 rounded-full bg-tiktok px-6 py-2 text-sm font-semibold text-white hover:bg-tiktok-hover"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : mobileFeedTab === 'following' ? (
                   <div>
                     <p className="text-lg font-semibold">No posts from followed creators yet.</p>
                     <p className="mt-2 text-sm text-white/80 md:text-gray-500">Switch to For You to discover more posts.</p>

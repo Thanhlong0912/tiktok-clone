@@ -28,6 +28,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AiOutlineClose } from 'react-icons/ai'
 import { BiChevronDown, BiChevronUp } from 'react-icons/bi'
+import { BsVolumeMuteFill, BsVolumeUpFill } from 'react-icons/bs'
 
 const Post = ({ params }: PostPageTypes) => {
   const { postById, postsByUser, setPostById, setPostsByUser } = usePostStore()
@@ -118,11 +119,15 @@ const Post = ({ params }: PostPageTypes) => {
     return isDesktopViewport ? desktopVideoRef.current : mobileVideoRef.current
   }, [isDesktopViewport])
 
-  const enableSound = () => {
-    setVideoSoundEnabled(true)
-    syncSoundState(true)
-    const activeVideo = getActiveVideo()
-    activeVideo?.play().catch(() => null)
+  const toggleSound = () => {
+    const enabled = !isSoundEnabled
+    setVideoSoundEnabled(enabled)
+    syncSoundState(enabled)
+
+    if (enabled) {
+      const activeVideo = getActiveVideo()
+      activeVideo?.play().catch(() => null)
+    }
   }
 
   const playDetailVideo = useCallback((video: HTMLVideoElement | null) => {
@@ -357,18 +362,22 @@ const Post = ({ params }: PostPageTypes) => {
             </div>
           </ClientOnly>
 
-          {(!postIsImage || hasImageAudio) && !isSoundEnabled ? (
+          {!postIsImage || hasImageAudio ? (
             <button
-              onClick={() => enableSound()}
-              className="absolute right-4 top-[calc(env(safe-area-inset-top)+12px)] z-30 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
+              onClick={() => toggleSound()}
+              aria-label={isSoundEnabled ? 'Mute' : 'Unmute'}
+              className="absolute right-4 top-[calc(env(safe-area-inset-top)+12px)] z-30 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
             >
-              Tap for sound
+              {isSoundEnabled ? <BsVolumeUpFill size={16} /> : <BsVolumeMuteFill size={16} />}
+              {!isSoundEnabled ? 'Tap for sound' : null}
             </button>
           ) : null}
 
           <VideoOptionsMenu
             isAutoScrollEnabled={isAutoScrollEnabled}
             onAutoScrollChange={handleAutoScrollChange}
+            postId={params.postId}
+            postUserId={params.userId}
             className="absolute right-4 top-[calc(env(safe-area-inset-top)+54px)]"
           />
 
@@ -506,6 +515,8 @@ const Post = ({ params }: PostPageTypes) => {
                   <VideoOptionsMenu
                     isAutoScrollEnabled={isAutoScrollEnabled}
                     onAutoScrollChange={handleAutoScrollChange}
+                    postId={params.postId}
+                    postUserId={params.userId}
                     className="absolute right-5 top-5"
                   />
 
@@ -524,12 +535,14 @@ const Post = ({ params }: PostPageTypes) => {
                         imageClassName="rounded-sm"
                         altPrefix={`${postById.profile.name} image`}
                       />
-                      {hasImageAudio && !isSoundEnabled ? (
+                      {hasImageAudio ? (
                         <button
-                          onClick={() => enableSound()}
-                          className="absolute left-5 top-16 z-30 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
+                          onClick={() => toggleSound()}
+                          aria-label={isSoundEnabled ? 'Mute' : 'Unmute'}
+                          className="absolute left-5 top-16 z-30 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
                         >
-                          Click for sound
+                          {isSoundEnabled ? <BsVolumeUpFill size={16} /> : <BsVolumeMuteFill size={16} />}
+                          {!isSoundEnabled ? 'Click for sound' : null}
                         </button>
                       ) : null}
                       </>
@@ -551,9 +564,10 @@ const Post = ({ params }: PostPageTypes) => {
                         />
                         {!isSoundEnabled ? (
                           <button
-                            onClick={() => enableSound()}
-                            className="absolute left-5 top-16 z-30 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
+                            onClick={() => toggleSound()}
+                            className="absolute left-5 top-16 z-30 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
                           >
+                            <BsVolumeMuteFill size={16} />
                             Click for sound
                           </button>
                         ) : null}

@@ -4,7 +4,6 @@ import React, { useState } from 'react'
 import moment from "moment"
 import { BiLoaderCircle } from 'react-icons/bi'
 import { BsTrash3 } from 'react-icons/bs'
-import { AiOutlineHeart } from 'react-icons/ai'
 import { useUser } from '@/app/context/user'
 import { useCommentStore } from '@/app/stores/comment'
 import useDeleteComment from '@/app/hooks/useDeleteComment'
@@ -58,7 +57,6 @@ const SingleComment = ({ comment, params }: SingleCommentCompTypes) => {
 
               <div className="mt-2 flex items-center gap-4 text-[14px] font-semibold text-ink-soft">
                 <span>{moment(comment?.created_at).fromNow()}</span>
-                <button className="hover:text-ink">Reply</button>
 
                 {contextUser?.user?.id == comment.profile.user_id ? (
                   <button
@@ -75,11 +73,6 @@ const SingleComment = ({ comment, params }: SingleCommentCompTypes) => {
                 ) : null}
               </div>
             </div>
-
-            <button className="mt-1 inline-flex min-w-[40px] flex-col items-center text-ink-soft hover:text-ink">
-              <AiOutlineHeart size={22} />
-              <span className="text-[13px]">0</span>
-            </button>
           </div>
         </div>
       </div>

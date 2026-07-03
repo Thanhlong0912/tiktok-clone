@@ -8,6 +8,7 @@ import { useCommentStore } from '@/app/stores/comment'
 import { useGeneralStore } from '@/app/stores/general'
 import useCreateComment from '@/app/hooks/useCreateComment'
 import { useUser } from '@/app/context/user'
+import { showToast } from '@/app/utils/toast'
 
 const Comments = ({ params, isMobileDetail = false, autoFocusInput = false }: CommentsCompTypes) => {
 
@@ -43,7 +44,7 @@ const Comments = ({ params, isMobileDetail = false, autoFocusInput = false }: Co
       setComment('')
     } catch (error) {
       console.log(error)
-      alert(error)
+      showToast('Could not post comment', 'error')
     } finally {
       setIsUploading(false)
     }

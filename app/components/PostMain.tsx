@@ -1,12 +1,16 @@
+import moment from 'moment'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AiFillHeart, AiOutlineRetweet } from 'react-icons/ai'
-import { BsFillPlayFill, BsBookmark, BsBookmarkFill } from 'react-icons/bs'
+import { BiLoaderCircle } from 'react-icons/bi'
+import { BsFillPlayFill, BsBookmark, BsBookmarkFill, BsTrash3, BsVolumeMuteFill, BsVolumeUpFill } from 'react-icons/bs'
 import { FaCommentDots, FaRegCopy, FaShare } from 'react-icons/fa'
+import { FiShare } from 'react-icons/fi'
 import { ImMusic } from 'react-icons/im'
 import { IoClose } from 'react-icons/io5'
 import { formatCount } from '../utils/formatNumber'
+import { showToast } from '../utils/toast'
 import {
   INTERACTION_EVENT,
   createInteraction,
@@ -18,6 +22,7 @@ import useCreateBucketUrl from '../hooks/useCreateBucketUrl'
 import useCreateComment from '../hooks/useCreateComment'
 import useCreateFollow from '../hooks/useCreateFollow'
 import useCreateLike from '../hooks/useCreateLike'
+import useDeleteComment from '../hooks/useDeleteComment'
 import useDeleteFollow from '../hooks/useDeleteFollow'
 import useDeleteLike from '../hooks/useDeleteLike'
 import useGetCommentsByPostId from '../hooks/useGetCommentsByPostId'
@@ -77,6 +82,8 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
   const [commentInput, setCommentInput] = useState<string>('')
   const [isSubmittingComment, setIsSubmittingComment] = useState<boolean>(false)
   const [isShareSheetOpen, setIsShareSheetOpen] = useState<boolean>(false)
+  const [canNativeShare, setCanNativeShare] = useState<boolean>(false)
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null)
   const [videoPreloadMode, setVideoPreloadMode] = useState<'metadata' | 'auto'>('metadata')
   const [isSoundEnabled, setIsSoundEnabledState] = useState<boolean>(false)
   const [isMediaActive, setIsMediaActive] = useState<boolean>(false)
@@ -427,14 +434,17 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
     }
   }, [])
 
-  const enableSound = useCallback(() => {
-    setVideoSoundEnabled(true)
-    syncSoundState(true)
+  const toggleSound = useCallback(() => {
+    const enabled = !isSoundEnabled
+    setVideoSoundEnabled(enabled)
+    syncSoundState(enabled)
 
-    const isDesktopViewport = typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
-    const activeVideo = isDesktopViewport ? desktopVideoRef.current : videoRef.current
-    activeVideo?.play().catch(() => null)
-  }, [syncSoundState])
+    if (enabled) {
+      const isDesktopViewport = typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+      const activeVideo = isDesktopViewport ? desktopVideoRef.current : videoRef.current
+      activeVideo?.play().catch(() => null)
+    }
+  }, [isSoundEnabled, syncSoundState])
 
   const likePost = useCallback(async () => {
     if (!user?.id || isLikeLoading || userLiked) {
@@ -519,10 +529,46 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
   }, [handleDoubleTapLike, togglePlayPause])
 
   const copyPostLink = useCallback(async () => {
-    await navigator.clipboard.writeText(`${window.location.origin}/post/${post.id}/${post.profile.user_id}`)
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/post/${post.id}/${post.profile.user_id}`)
+      showToast('Link copied to clipboard')
+    } catch {
+      showToast('Could not copy link', 'error')
+    }
     setIsShareSheetOpen(false)
-    alert('Copied to clipboard!')
   }, [post.id, post.profile.user_id])
+
+  useEffect(() => {
+    setCanNativeShare(typeof navigator !== 'undefined' && typeof navigator.share === 'function')
+  }, [])
+
+  const sharePostNative = useCallback(async () => {
+    const url = `${window.location.origin}/post/${post.id}/${post.profile.user_id}`
+    try {
+      await navigator.share({ title: `@${post.profile.name} on TikTok Clone`, text: post.text, url })
+      setIsShareSheetOpen(false)
+    } catch {
+      // User dismissed the native share sheet — nothing to do.
+    }
+  }, [post.id, post.profile.name, post.profile.user_id, post.text])
+
+  const deleteFeedComment = useCallback(async (commentId: string) => {
+    if (deletingCommentId) return
+    if (!confirm('Are you sure you want to delete this comment?')) return
+
+    setDeletingCommentId(commentId)
+    try {
+      await useDeleteComment(commentId)
+      const comments = await useGetCommentsByPostId(post.id)
+      const cachedLikes = engagementCacheByPost.get(post.id)?.likes || []
+      applyEngagementSnapshot(cachedLikes, comments || [])
+    } catch (error) {
+      console.error(error)
+      showToast('Could not delete comment', 'error')
+    } finally {
+      setDeletingCommentId(null)
+    }
+  }, [applyEngagementSnapshot, deletingCommentId, post.id])
 
   const rememberCurrentPlayback = useCallback(() => {
     if (isImagePost(post.video_url)) {
@@ -698,22 +744,26 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
           </button>
         )}
 
-        {(!postIsImage || hasImageAudio) && !isSoundEnabled ? (
+        {!postIsImage || hasImageAudio ? (
           <button
             onClick={(event) => {
               event.preventDefault()
               event.stopPropagation()
-              enableSound()
+              toggleSound()
             }}
-            className="absolute left-4 top-[calc(env(safe-area-inset-top)+16px)] z-30 rounded-full bg-black/55 px-3 py-1.5 text-xs font-semibold text-white"
+            aria-label={isSoundEnabled ? 'Mute' : 'Unmute'}
+            className="absolute left-4 top-[calc(env(safe-area-inset-top)+16px)] z-30 flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1.5 text-xs font-semibold text-white"
           >
-            Tap for sound
+            {isSoundEnabled ? <BsVolumeUpFill size={16} /> : <BsVolumeMuteFill size={16} />}
+            {!isSoundEnabled ? 'Tap for sound' : null}
           </button>
         ) : null}
 
         <VideoOptionsMenu
           isAutoScrollEnabled={isAutoScrollEnabled}
           onAutoScrollChange={onAutoScrollChange}
+          postId={post.id}
+          postUserId={post.profile.user_id}
           className="absolute right-4 top-[calc(env(safe-area-inset-top)+16px)]"
         />
 
@@ -856,10 +906,27 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
                         src={useCreateBucketUrl(comment.profile.image)}
                         alt="Profile"
                       />
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <p className="text-[13px] font-semibold">{comment.profile.name}</p>
                         <p className="text-[14px] leading-5">{comment.text}</p>
+                        <p className="mt-1 text-[12px] font-medium text-ink-soft">
+                          {moment(comment.created_at).fromNow()}
+                        </p>
                       </div>
+                      {user?.id === comment.user_id ? (
+                        <button
+                          onClick={() => deleteFeedComment(comment.id)}
+                          disabled={deletingCommentId === comment.id}
+                          aria-label="Delete comment"
+                          className="mt-1 text-ink-soft disabled:opacity-60"
+                        >
+                          {deletingCommentId === comment.id ? (
+                            <BiLoaderCircle className="animate-spin" size={15} />
+                          ) : (
+                            <BsTrash3 size={14} />
+                          )}
+                        </button>
+                      ) : null}
                     </div>
                   ))
                 )}
@@ -887,45 +954,6 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
           </div>
         ) : null}
 
-        {isShareSheetOpen ? (
-          <div className="absolute inset-0 z-40 flex items-end bg-black/45">
-            <button
-              onClick={() => setIsShareSheetOpen(false)}
-              aria-label="Close share sheet"
-              className="absolute inset-0"
-            />
-            <div className="relative w-full rounded-t-2xl bg-surface px-4 pt-4 text-ink">
-              <div className="mb-3 flex items-center justify-between">
-                <p className="text-sm font-semibold">Share to</p>
-                <button onClick={() => setIsShareSheetOpen(false)} className="rounded-full bg-surface-subtle p-1">
-                  <IoClose size={22} />
-                </button>
-              </div>
-
-              <div className="space-y-2 pb-[calc(env(safe-area-inset-bottom)+12px)]">
-                <button
-                  onClick={copyPostLink}
-                  className="flex w-full items-center justify-center gap-2 rounded-full border border-line px-4 py-2.5 text-sm font-semibold"
-                >
-                  <FaRegCopy size={14} />
-                  Copy link
-                </button>
-                <button
-                  onClick={openPostDetail}
-                  className="w-full rounded-full bg-ink px-4 py-2.5 text-sm font-semibold text-surface"
-                >
-                  Go to post
-                </button>
-                <button
-                  onClick={() => setIsShareSheetOpen(false)}
-                  className="w-full rounded-full bg-surface-subtle px-4 py-2.5 text-sm font-semibold"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
       </div>
 
       {/* Desktop / tablet immersive feed */}
@@ -942,6 +970,8 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
             <VideoOptionsMenu
               isAutoScrollEnabled={isAutoScrollEnabled}
               onAutoScrollChange={onAutoScrollChange}
+              postId={post.id}
+              postUserId={post.profile.user_id}
               className="absolute right-3 top-3"
             />
 
@@ -1014,16 +1044,18 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
               </p>
             </div>
 
-            {(!postIsImage || hasImageAudio) && !isSoundEnabled ? (
+            {!postIsImage || hasImageAudio ? (
               <button
                 onClick={(event) => {
                   event.preventDefault()
                   event.stopPropagation()
-                  enableSound()
+                  toggleSound()
                 }}
-                className="absolute left-3 top-3 z-30 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
+                aria-label={isSoundEnabled ? 'Mute' : 'Unmute'}
+                className="absolute left-3 top-3 z-30 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
               >
-                Click for sound
+                {isSoundEnabled ? <BsVolumeUpFill size={16} /> : <BsVolumeMuteFill size={16} />}
+                {!isSoundEnabled ? 'Click for sound' : null}
               </button>
             ) : null}
 
@@ -1091,7 +1123,7 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
               <span className="text-xs font-semibold">{formatCount(repostCount)}</span>
             </button>
 
-            <button onClick={copyPostLink} className="flex flex-col items-center gap-1">
+            <button onClick={() => setIsShareSheetOpen(true)} className="flex flex-col items-center gap-1">
               <span className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-subtle">
                 <FaShare size={22} />
               </span>
@@ -1100,6 +1132,55 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
           </div>
         </div>
       </div>
+
+      {isShareSheetOpen ? (
+        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/45 md:items-center">
+          <button
+            onClick={() => setIsShareSheetOpen(false)}
+            aria-label="Close share sheet"
+            className="absolute inset-0"
+          />
+          <div className="tt-sheet-up relative w-full rounded-t-2xl bg-surface px-4 pt-4 text-ink md:w-[400px] md:rounded-2xl md:pb-4">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm font-semibold">Share to</p>
+              <button onClick={() => setIsShareSheetOpen(false)} className="rounded-full bg-surface-subtle p-1" aria-label="Close">
+                <IoClose size={22} />
+              </button>
+            </div>
+
+            <div className="space-y-2 pb-[calc(env(safe-area-inset-bottom)+12px)] md:pb-0">
+              {canNativeShare ? (
+                <button
+                  onClick={sharePostNative}
+                  className="flex w-full items-center justify-center gap-2 rounded-full bg-tiktok px-4 py-2.5 text-sm font-semibold text-white hover:bg-tiktok-hover"
+                >
+                  <FiShare size={15} />
+                  Share via...
+                </button>
+              ) : null}
+              <button
+                onClick={copyPostLink}
+                className="flex w-full items-center justify-center gap-2 rounded-full border border-line px-4 py-2.5 text-sm font-semibold hover:bg-surface-subtle"
+              >
+                <FaRegCopy size={14} />
+                Copy link
+              </button>
+              <button
+                onClick={openPostDetail}
+                className="w-full rounded-full bg-ink px-4 py-2.5 text-sm font-semibold text-surface"
+              >
+                Go to post
+              </button>
+              <button
+                onClick={() => setIsShareSheetOpen(false)}
+                className="w-full rounded-full bg-surface-subtle px-4 py-2.5 text-sm font-semibold"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isCommentsSheetOpen ? (
         <div className="fixed bottom-0 right-0 top-[60px] z-[35] hidden w-[420px] max-w-[92vw] flex-col border-l border-line bg-surface text-ink shadow-rail md:flex">
@@ -1132,14 +1213,23 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
                       <p className="truncate text-[15px] font-semibold text-ink-soft">{comment.profile.name}</p>
                       <p className="mt-1 break-words text-[16px] leading-6 text-ink">{comment.text}</p>
                       <div className="mt-2 flex items-center gap-4 text-[14px] font-semibold text-ink-soft">
-                        <span>Now</span>
-                        <button className="hover:text-ink">Reply</button>
+                        <span>{moment(comment.created_at).fromNow()}</span>
+                        {user?.id === comment.user_id ? (
+                          <button
+                            onClick={() => deleteFeedComment(comment.id)}
+                            disabled={deletingCommentId === comment.id}
+                            aria-label="Delete comment"
+                            className="inline-flex items-center hover:text-ink disabled:opacity-60"
+                          >
+                            {deletingCommentId === comment.id ? (
+                              <BiLoaderCircle className="animate-spin" size={16} />
+                            ) : (
+                              <BsTrash3 size={15} />
+                            )}
+                          </button>
+                        ) : null}
                       </div>
                     </div>
-                    <button className="mt-1 inline-flex flex-col items-center text-ink-soft hover:text-ink">
-                      <AiFillHeart size={18} />
-                      <span className="text-[12px]">0</span>
-                    </button>
                   </div>
                 ))
               )}

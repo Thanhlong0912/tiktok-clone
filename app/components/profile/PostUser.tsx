@@ -3,14 +3,29 @@ import { PostUserCompTypes } from "@/app/types"
 import { getImagePostIds, isImagePost } from '@/app/utils/postMedia'
 import { pauseOtherVideos, pauseVideosDuringNavigation, rememberVideoPlayback } from '@/app/utils/videoPlayback'
 import Link from "next/link"
-import { useEffect, useRef } from "react"
-import { AiOutlineLoading3Quarters } from "react-icons/ai"
-import { BiErrorCircle } from "react-icons/bi"
-import { SiSoundcharts } from "react-icons/si"
+import { useEffect, useRef, useState } from "react"
+import { AiFillHeart, AiOutlineLoading3Quarters } from "react-icons/ai"
 import ImageSlideshow from '../ImageSlideshow'
+import { formatCount } from '@/app/utils/formatNumber'
+import { getPostLikeCount } from '@/app/utils/postLikeCounts'
 
 const PostUser = ({ post }: PostUserCompTypes) => {
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const [likeCount, setLikeCount] = useState<number | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    getPostLikeCount(post.id)
+      .then((count) => {
+        if (!cancelled) setLikeCount(count)
+      })
+      .catch(() => null)
+
+    return () => {
+      cancelled = true
+    }
+  }, [post.id])
 
   useEffect(() => {
     const video = videoRef.current
@@ -97,11 +112,12 @@ const PostUser = ({ post }: PostUserCompTypes) => {
               <p className="text-ink text-[15px] pt-1 break-words">
                   {post.text}
               </p>
-              <div className="flex items-center gap-1 -ml-1 text-ink-soft font-bold text-xs">
-                  <SiSoundcharts size="15"/>
-                  100%
-                  <BiErrorCircle  size="16"/>
-              </div>
+              {likeCount !== null ? (
+                  <div className="flex items-center gap-1 text-ink-soft font-semibold text-xs">
+                      <AiFillHeart size="14"/>
+                      {formatCount(likeCount)}
+                  </div>
+              ) : null}
           </div>
       </div>
     </>

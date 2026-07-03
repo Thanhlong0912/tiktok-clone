@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { HiDotsHorizontal } from 'react-icons/hi'
+import { FaRegCopy, FaRegFlag } from 'react-icons/fa'
 import AutoScrollToggle from './AutoScrollToggle'
+import { showToast } from '../utils/toast'
 
 type VideoOptionsMenuProps = {
   isAutoScrollEnabled: boolean
   onAutoScrollChange: (enabled: boolean) => void
+  /** When provided, the menu also offers Copy link and Report for this post. */
+  postId?: string
+  postUserId?: string
   className?: string
   buttonClassName?: string
   panelClassName?: string
@@ -13,6 +18,8 @@ type VideoOptionsMenuProps = {
 const VideoOptionsMenu = ({
   isAutoScrollEnabled,
   onAutoScrollChange,
+  postId,
+  postUserId,
   className = '',
   buttonClassName = '',
   panelClassName = '',
@@ -52,6 +59,23 @@ const VideoOptionsMenu = ({
     }
   }, [isOpen])
 
+  const copyPostLink = async () => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/post/${postId}/${postUserId}`)
+      showToast('Link copied to clipboard')
+    } catch {
+      showToast('Could not copy link', 'error')
+    }
+    setIsOpen(false)
+  }
+
+  const reportPost = () => {
+    setIsOpen(false)
+    showToast('Thanks for reporting. We’ll review this video.', 'info')
+  }
+
+  const hasPostActions = Boolean(postId && postUserId)
+
   return (
     <div ref={menuRef} className={`z-30 ${className}`}>
       <button
@@ -73,7 +97,7 @@ const VideoOptionsMenu = ({
 
       {isOpen ? (
         <div
-          className={`absolute right-0 mt-2 w-[200px] rounded-xl border border-white/15 bg-[#2f2f34] p-2.5 text-white shadow-xl ${panelClassName}`}
+          className={`absolute right-0 mt-2 w-[210px] rounded-xl border border-white/15 bg-[#2f2f34] p-2.5 text-white shadow-xl ${panelClassName}`}
         >
           <AutoScrollToggle
             enabled={isAutoScrollEnabled}
@@ -81,6 +105,31 @@ const VideoOptionsMenu = ({
             className="w-full rounded-lg px-2 py-1.5 text-white"
             labelClassName="text-[15px] font-medium"
           />
+
+          {hasPostActions ? (
+            <>
+              <button
+                onClick={(event) => {
+                  event.stopPropagation()
+                  copyPostLink()
+                }}
+                className="mt-1 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-[15px] font-medium hover:bg-white/10"
+              >
+                <FaRegCopy size={15} />
+                Copy link
+              </button>
+              <button
+                onClick={(event) => {
+                  event.stopPropagation()
+                  reportPost()
+                }}
+                className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-[15px] font-medium text-[#ff7086] hover:bg-white/10"
+              >
+                <FaRegFlag size={15} />
+                Report
+              </button>
+            </>
+          ) : null}
         </div>
       ) : null}
     </div>
