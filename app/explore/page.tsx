@@ -1,18 +1,22 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { debounce } from 'debounce'
 import { BiSearch } from 'react-icons/bi'
 import { AiFillHeart, AiFillPlayCircle } from 'react-icons/ai'
-import { BsImages } from 'react-icons/bs'
+import { BsImages, BsHash } from 'react-icons/bs'
+import CaptionText from '../components/CaptionText'
 import ClientOnly from '../components/ClientOnly'
+import ImageSlideshow from '../components/ImageSlideshow'
 import MobileBottomNav from '../components/MobileBottomNav'
 import MainLayout from '../layouts/MainLayout'
 import { usePostStore } from '../stores/post'
 import useCreateBucketUrl from '../hooks/useCreateBucketUrl'
 import useSearchProfilesByName from '../hooks/useSearchProfilesByName'
-import { getImagePostIds, isImagePost } from '../utils/postMedia'
+import { getImagePostAudioId, getImagePostIds, isImagePost } from '../utils/postMedia'
+import { extractHashtags, getTrendingTags, normalizeTag, searchTags } from '../utils/postTags'
+import { pauseOtherVideos } from '../utils/videoPlayback'
 import { getPostLikeCount } from '../utils/postLikeCounts'
 import { formatCount } from '../utils/formatNumber'
 import { PostWithProfile, RandomUsers } from '../types'
@@ -27,15 +31,23 @@ export default function ExplorePage() {
   const [query, setQuery] = useState('')
   const [profileResults, setProfileResults] = useState<RandomUsers[]>([])
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>({})
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (allPosts.length < 1) setAllPosts()
   }, [])
 
+  useEffect(() => {
+    return () => {
+      if (blurTimerRef.current) clearTimeout(blurTimerRef.current)
+    }
+  }, [])
+
   const handleSearch = useMemo(
     () =>
       debounce(async (value: string) => {
-        if (!value.trim()) {
+        if (!value.trim() || value.trim().startsWith('#')) {
           setProfileResults([])
           return
         }
@@ -54,6 +66,7 @@ export default function ExplorePage() {
     const incoming = searchParams.get('q') || ''
     if (incoming && incoming !== query) {
       setQuery(incoming)
+      setShowSuggestions(false)
       handleSearch(incoming)
     }
   }, [searchParams])
@@ -78,11 +91,23 @@ export default function ExplorePage() {
     }
   }, [allPosts])
 
+  const trendingTags = useMemo(() => getTrendingTags(allPosts, 10), [allPosts])
+
+  const cleanQuery = query.trim().toLowerCase()
+  const isTagQuery = cleanQuery.startsWith('#')
+  const activeTag = isTagQuery ? normalizeTag(cleanQuery) : ''
+
+  const tagSuggestions = useMemo(() => {
+    if (!cleanQuery) return []
+    return searchTags(allPosts, cleanQuery, 6)
+  }, [allPosts, cleanQuery])
+
   const visiblePosts = useMemo(() => {
     let posts = allPosts
 
-    const cleanQuery = query.trim().toLowerCase()
-    if (cleanQuery) {
+    if (activeTag) {
+      posts = posts.filter((post) => extractHashtags(post.text).indexOf(activeTag) !== -1)
+    } else if (cleanQuery) {
       posts = posts.filter(
         (post) =>
           post.text?.toLowerCase().includes(cleanQuery) ||
@@ -100,42 +125,80 @@ export default function ExplorePage() {
     }
 
     return posts
-  }, [activeCategory, allPosts, likeCounts, query])
+  }, [activeCategory, activeTag, allPosts, cleanQuery, likeCounts])
 
-  const isSearching = query.trim().length > 0
+  const isSearching = cleanQuery.length > 0
+
+  const applyTag = (tag: string) => {
+    setShowSuggestions(false)
+    setProfileResults([])
+    setQuery(activeTag === tag ? '' : `#${tag}`)
+  }
+
+  const hasSuggestions = showSuggestions && isSearching && (tagSuggestions.length > 0 || profileResults.length > 0)
 
   return (
     <MainLayout>
       <div className="mx-auto w-full max-w-[1140px] px-3 pb-24 pt-[76px] md:pl-[80px] lg:pl-[240px]">
         {/* Search */}
-        <div className="mx-auto flex max-w-[520px] items-center gap-2 rounded-full bg-surface-subtle px-4 py-2.5">
-          <BiSearch size={20} className="text-ink-soft" />
-          <input
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value)
-              handleSearch(e.target.value)
-            }}
-            placeholder="Search creators and videos"
-            className="w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-ink-soft"
-          />
-        </div>
-
-        {profileResults.length > 0 ? (
-          <div className="mx-auto mt-3 max-w-[520px] overflow-hidden rounded-xl border border-line bg-surface-elevated">
-            <p className="border-b border-line px-4 py-2 text-[13px] font-semibold text-ink-soft">Accounts</p>
-            {profileResults.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => router.push(`/profile/${p.id}`)}
-                className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-surface-subtle"
-              >
-                <img src={useCreateBucketUrl(p.image)} className="h-9 w-9 rounded-full object-cover" alt={p.name} />
-                <span className="text-[15px] font-semibold text-ink">@{p.name}</span>
-              </button>
-            ))}
+        <div className="relative mx-auto max-w-[520px]">
+          <div className="flex items-center gap-2 rounded-full bg-surface-subtle px-4 py-2.5">
+            <BiSearch size={20} className="text-ink-soft" />
+            <input
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value)
+                setShowSuggestions(true)
+                handleSearch(e.target.value)
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              onBlur={() => {
+                blurTimerRef.current = setTimeout(() => setShowSuggestions(false), 150)
+              }}
+              placeholder="Search creators, videos and #tags"
+              className="w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-ink-soft"
+            />
           </div>
-        ) : null}
+
+          {/* Autocomplete */}
+          {hasSuggestions ? (
+            <div className="absolute left-0 top-[52px] z-30 w-full overflow-hidden rounded-xl border border-line bg-surface-elevated shadow-rail">
+              {tagSuggestions.length > 0 ? (
+                <>
+                  <p className="border-b border-line px-4 py-2 text-[13px] font-semibold text-ink-soft">Tags</p>
+                  {tagSuggestions.map((tag) => (
+                    <button
+                      key={tag}
+                      onClick={() => applyTag(tag)}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-surface-subtle"
+                    >
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-subtle text-ink-soft">
+                        <BsHash size={18} />
+                      </span>
+                      <span className="text-[15px] font-semibold text-ink">#{tag}</span>
+                    </button>
+                  ))}
+                </>
+              ) : null}
+
+              {profileResults.length > 0 ? (
+                <>
+                  <p className="border-b border-t border-line px-4 py-2 text-[13px] font-semibold text-ink-soft first:border-t-0">Accounts</p>
+                  {profileResults.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => router.push(`/profile/${p.id}`)}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-surface-subtle"
+                    >
+                      <img src={useCreateBucketUrl(p.image)} className="h-9 w-9 rounded-full object-cover" alt={p.name} />
+                      <span className="text-[15px] font-semibold text-ink">@{p.name}</span>
+                    </button>
+                  ))}
+                </>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
 
         {/* Category chips */}
         <div className="no-scrollbar mt-5 flex gap-2 overflow-x-auto pb-1">
@@ -153,6 +216,28 @@ export default function ExplorePage() {
             </button>
           ))}
         </div>
+
+        {/* Tag chips (from real post hashtags); ClientOnly because the post
+            store hydrates from localStorage and would mismatch server HTML */}
+        <ClientOnly>
+          {trendingTags.length > 0 ? (
+            <div className="no-scrollbar mt-2 flex gap-2 overflow-x-auto pb-1">
+              {trendingTags.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => applyTag(tag)}
+                  className={`whitespace-nowrap rounded-full border px-3.5 py-1 text-[13px] font-semibold transition-colors ${
+                    activeTag === tag
+                      ? 'border-tiktok bg-tiktok/10 text-tiktok'
+                      : 'border-line text-ink-soft hover:text-ink'
+                  }`}
+                >
+                  #{tag}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </ClientOnly>
 
         {/* Grid */}
         <ClientOnly>
@@ -221,36 +306,91 @@ const ExploreThumb = ({
   likeCount?: number
   onClick: () => void
 }) => {
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const [isHovering, setIsHovering] = useState(false)
+
   const postIsImage = isImagePost(post.video_url)
-  const firstImageId = postIsImage ? getImagePostIds(post.video_url)[0] : ''
-  const mediaUrl = useCreateBucketUrl(postIsImage ? firstImageId : post.video_url)
+  const postImageIds = getImagePostIds(post.video_url)
+  const postAudioId = getImagePostAudioId(post.video_url)
+  const videoUrl = useCreateBucketUrl(postIsImage ? '' : post.video_url)
+
+  // Hover previews play with music; retry muted when the browser blocks
+  // unmuted autoplay.
+  const handleHoverStart = () => {
+    setIsHovering(true)
+
+    const video = videoRef.current
+    if (!video) return
+
+    pauseOtherVideos(video)
+    video.muted = false
+    video.play().catch(() => {
+      video.muted = true
+      video.play().catch(() => null)
+    })
+  }
+
+  const handleHoverEnd = () => {
+    setIsHovering(false)
+
+    const video = videoRef.current
+    if (!video) return
+
+    video.pause()
+    video.muted = true
+  }
+
+  useEffect(() => {
+    return () => {
+      videoRef.current?.pause()
+    }
+  }, [])
 
   return (
-    <button onClick={onClick} className="group relative block overflow-hidden rounded-lg bg-black">
+    <button
+      onClick={onClick}
+      onMouseEnter={handleHoverStart}
+      onMouseLeave={handleHoverEnd}
+      className="group relative block overflow-hidden rounded-lg bg-black"
+    >
       <div className="relative aspect-[9/13] w-full">
         {postIsImage ? (
-          <img src={mediaUrl} className="h-full w-full object-cover" alt={post.text} />
+          <ImageSlideshow
+            imageIds={postImageIds}
+            audioId={postAudioId}
+            muted={false}
+            autoPlay={isHovering}
+            showControls={false}
+            showDots={false}
+            className="h-full w-full"
+            imageClassName="!object-cover"
+            altPrefix={post.text || 'Explore image'}
+          />
         ) : (
           <video
-            src={mediaUrl}
+            ref={videoRef}
+            src={videoUrl}
             muted
+            loop
             playsInline
             preload="metadata"
             className="h-full w-full object-cover"
           />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-        <span className="absolute right-2 top-2 text-white/90 drop-shadow">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+        <span className="pointer-events-none absolute right-2 top-2 text-white/90 drop-shadow">
           {postIsImage ? <BsImages size={16} /> : <AiFillPlayCircle size={18} />}
         </span>
         {likeCount !== undefined ? (
-          <div className="absolute inset-x-2 bottom-2 flex items-center gap-1 text-[13px] font-semibold text-white drop-shadow">
+          <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center gap-1 text-[13px] font-semibold text-white drop-shadow">
             <AiFillHeart size={15} />
             {formatCount(likeCount)}
           </div>
         ) : null}
       </div>
-      <p className="truncate px-1.5 py-1.5 text-left text-[13px] text-ink">{post.text || `@${post.profile.name}`}</p>
+      <p className="truncate px-1.5 py-1.5 text-left text-[13px] text-ink">
+        <CaptionText text={post.text || `@${post.profile.name}`} linkify={false} />
+      </p>
     </button>
   )
 }

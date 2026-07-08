@@ -36,9 +36,28 @@ const LOCAL_KEY: Record<InteractionKind, string> = {
 
 export const INTERACTION_EVENT = 'tt-interaction-change'
 
+// Once a remote call fails (missing collection, missing index, permissions...)
+// stop hitting Appwrite for that kind this session and serve localStorage.
+const remoteUnavailable: Partial<Record<InteractionKind, boolean>> = {}
+
+function markRemoteUnavailable(kind: InteractionKind, error: unknown) {
+  if (remoteUnavailable[kind]) return
+  remoteUnavailable[kind] = true
+  console.warn(
+    `[interactions] Appwrite "${kind}" collection unavailable — falling back to local storage.`,
+    error
+  )
+}
+
 function collectionId(kind: InteractionKind): string | null {
+  if (remoteUnavailable[kind]) return null
   const id = COLLECTION_ENV[kind]
   return id && id.length > 0 ? id : null
+}
+
+function notifyChange(kind: InteractionKind) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(INTERACTION_EVENT, { detail: { kind } }))
 }
 
 function readLocal(kind: InteractionKind): Interaction[] {
@@ -64,16 +83,20 @@ export async function getInteractionsByPost(
 ): Promise<Interaction[]> {
   const cid = collectionId(kind)
   if (cid) {
-    const res = await database.listDocuments(
-      String(process.env.NEXT_PUBLIC_DATABASE_ID),
-      cid,
-      [Query.equal('post_id', postId)]
-    )
-    return res.documents.map((doc) => ({
-      id: doc.$id,
-      user_id: doc.user_id,
-      post_id: doc.post_id,
-    }))
+    try {
+      const res = await database.listDocuments(
+        String(process.env.NEXT_PUBLIC_DATABASE_ID),
+        cid,
+        [Query.equal('post_id', postId)]
+      )
+      return res.documents.map((doc) => ({
+        id: doc.$id,
+        user_id: doc.user_id,
+        post_id: doc.post_id,
+      }))
+    } catch (error) {
+      markRemoteUnavailable(kind, error)
+    }
   }
   return readLocal(kind).filter((i) => i.post_id === postId)
 }
@@ -84,16 +107,20 @@ export async function getInteractionsByUser(
 ): Promise<Interaction[]> {
   const cid = collectionId(kind)
   if (cid) {
-    const res = await database.listDocuments(
-      String(process.env.NEXT_PUBLIC_DATABASE_ID),
-      cid,
-      [Query.equal('user_id', userId)]
-    )
-    return res.documents.map((doc) => ({
-      id: doc.$id,
-      user_id: doc.user_id,
-      post_id: doc.post_id,
-    }))
+    try {
+      const res = await database.listDocuments(
+        String(process.env.NEXT_PUBLIC_DATABASE_ID),
+        cid,
+        [Query.equal('user_id', userId)]
+      )
+      return res.documents.map((doc) => ({
+        id: doc.$id,
+        user_id: doc.user_id,
+        post_id: doc.post_id,
+      }))
+    } catch (error) {
+      markRemoteUnavailable(kind, error)
+    }
   }
   return readLocal(kind).filter((i) => i.user_id === userId)
 }
@@ -105,13 +132,18 @@ export async function createInteraction(
 ): Promise<string> {
   const cid = collectionId(kind)
   if (cid) {
-    const res = await database.createDocument(
-      String(process.env.NEXT_PUBLIC_DATABASE_ID),
-      cid,
-      ID.unique(),
-      { user_id: userId, post_id: postId }
-    )
-    return res.$id
+    try {
+      const res = await database.createDocument(
+        String(process.env.NEXT_PUBLIC_DATABASE_ID),
+        cid,
+        ID.unique(),
+        { user_id: userId, post_id: postId }
+      )
+      notifyChange(kind)
+      return res.$id
+    } catch (error) {
+      markRemoteUnavailable(kind, error)
+    }
   }
 
   const list = readLocal(kind)
@@ -127,12 +159,17 @@ export async function deleteInteraction(
 ): Promise<void> {
   const cid = collectionId(kind)
   if (cid && !id.startsWith('local_')) {
-    await database.deleteDocument(
-      String(process.env.NEXT_PUBLIC_DATABASE_ID),
-      cid,
-      id
-    )
-    return
+    try {
+      await database.deleteDocument(
+        String(process.env.NEXT_PUBLIC_DATABASE_ID),
+        cid,
+        id
+      )
+      notifyChange(kind)
+      return
+    } catch (error) {
+      markRemoteUnavailable(kind, error)
+    }
   }
 
   const list = readLocal(kind).filter((i) => i.id !== id)

@@ -1,16 +1,15 @@
-import React, { useEffect } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { AiFillHome, AiOutlineHome } from 'react-icons/ai'
-import { IoCompass, IoCompassOutline } from 'react-icons/io5'
-import { RiUserFollowFill, RiUserFollowLine, RiLiveFill, RiLiveLine } from 'react-icons/ri'
-import { FaUserFriends } from 'react-icons/fa'
-import { BsPersonFill, BsPerson } from 'react-icons/bs'
-import MenuItem from './MenuItem'
 import ClientOnly from '@/app/components/ClientOnly'
-import MenuItemFollow from './MenuItemFollow'
-import { useGeneralStore } from '@/app/stores/general'
 import { useUser } from '@/app/context/user'
+import { useGeneralStore } from '@/app/stores/general'
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
+import { useEffect } from 'react'
+import { AiFillHome, AiOutlineHome } from 'react-icons/ai'
+import { BsPerson, BsPersonFill } from 'react-icons/bs'
+import { IoCompass, IoCompassOutline } from 'react-icons/io5'
+import { RiUserFollowFill, RiUserFollowLine } from 'react-icons/ri'
+import MenuItem from './MenuItem'
+import MenuItemFollow from './MenuItemFollow'
 
 const SideNavMain = () => {
   let { setRandomUsers, randomUsers } = useGeneralStore()
@@ -59,19 +58,6 @@ const SideNavMain = () => {
           icon={RiUserFollowLine}
           iconActive={RiUserFollowFill}
           onClick={() => router.push('/?feed=following')}
-        />
-        <MenuItem
-          label="Friends"
-          href="/explore"
-          icon={FaUserFriends}
-          onClick={() => requireAuth(() => router.push('/explore'))}
-        />
-        <MenuItem
-          label="LIVE"
-          href="/live"
-          icon={RiLiveLine}
-          iconActive={RiLiveFill}
-          active={pathname === '/live'}
         />
         {contextUser?.user?.id ? (
           <MenuItem

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { HiDotsHorizontal } from 'react-icons/hi'
 import { FaRegCopy, FaRegFlag } from 'react-icons/fa'
+import { FiExternalLink } from 'react-icons/fi'
 import AutoScrollToggle from './AutoScrollToggle'
 import { showToast } from '../utils/toast'
 
@@ -10,6 +11,8 @@ type VideoOptionsMenuProps = {
   /** When provided, the menu also offers Copy link and Report for this post. */
   postId?: string
   postUserId?: string
+  /** When provided, "Go to post" replaces "Copy link" below the auto-scroll toggle. */
+  onGoToPost?: () => void
   className?: string
   buttonClassName?: string
   panelClassName?: string
@@ -20,6 +23,7 @@ const VideoOptionsMenu = ({
   onAutoScrollChange,
   postId,
   postUserId,
+  onGoToPost,
   className = '',
   buttonClassName = '',
   panelClassName = '',
@@ -108,16 +112,30 @@ const VideoOptionsMenu = ({
 
           {hasPostActions ? (
             <>
-              <button
-                onClick={(event) => {
-                  event.stopPropagation()
-                  copyPostLink()
-                }}
-                className="mt-1 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-[15px] font-medium hover:bg-white/10"
-              >
-                <FaRegCopy size={15} />
-                Copy link
-              </button>
+              {onGoToPost ? (
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setIsOpen(false)
+                    onGoToPost()
+                  }}
+                  className="mt-1 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-[15px] font-medium hover:bg-white/10"
+                >
+                  <FiExternalLink size={15} />
+                  Go to post
+                </button>
+              ) : (
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    copyPostLink()
+                  }}
+                  className="mt-1 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-[15px] font-medium hover:bg-white/10"
+                >
+                  <FaRegCopy size={15} />
+                  Copy link
+                </button>
+              )}
               <button
                 onClick={(event) => {
                   event.stopPropagation()

@@ -2,15 +2,17 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation'
 import { BiSearch, BiUser } from "react-icons/bi"
 import { AiOutlinePlus } from "react-icons/ai"
-import { BsThreeDotsVertical } from "react-icons/bs"
+import { BsHash, BsThreeDotsVertical } from "react-icons/bs"
 import { FiLogOut } from "react-icons/fi"
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useUser } from '@/app/context/user';
 import { useGeneralStore } from '@/app/stores/general';
+import { usePostStore } from '@/app/stores/post';
 import { RandomUsers } from '@/app/types';
 import { debounce } from 'debounce';
 import useSearchProfilesByName from '@/app/hooks/useSearchProfilesByName';
 import useCreateBucketUrl from '@/app/hooks/useCreateBucketUrl';
+import { searchTags } from '@/app/utils/postTags';
 import ThemeToggle from './ThemeToggle';
 
 const TopNav = () => {
@@ -22,6 +24,18 @@ const TopNav = () => {
   const [showMenu, setShowMenu] = useState<boolean>(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
   let { setIsLoginOpen, setIsEditProfileOpen } = useGeneralStore()
+  const { allPosts } = usePostStore()
+
+  // Tag autocomplete works off the cached feed; no extra requests.
+  const tagSuggestions = useMemo(
+    () => searchTags(allPosts, searchQuery, 4),
+    [allPosts, searchQuery]
+  )
+
+  const clearSearch = () => {
+    setSearchProfiles([])
+    setSearchQuery('')
+  }
 
   useEffect(() => { setIsEditProfileOpen(false) }, [])
 
@@ -78,8 +92,23 @@ const TopNav = () => {
             placeholder="Search accounts and videos"
           />
 
-          {searchProfiles.length > 0 ? (
+          {searchQuery.trim() && (searchProfiles.length > 0 || tagSuggestions.length > 0) ? (
             <div className="absolute left-0 top-[52px] z-20 w-full overflow-hidden rounded-xl border border-line bg-surface-elevated py-1 shadow-rail">
+              {tagSuggestions.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => {
+                    clearSearch()
+                    router.push(`/explore?q=${encodeURIComponent(`#${tag}`)}`)
+                  }}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 hover:bg-surface-subtle"
+                >
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-subtle text-ink-soft">
+                    <BsHash size={18} />
+                  </span>
+                  <span className="truncate text-[15px] font-medium text-ink">#{tag}</span>
+                </button>
+              ))}
               {searchProfiles.map((profile) => (
                 <Link
                   key={profile.id}
@@ -93,8 +122,9 @@ const TopNav = () => {
               ))}
               <button
                 onClick={() => {
-                  setSearchProfiles([])
-                  router.push(`/explore?q=${encodeURIComponent(searchQuery.trim())}`)
+                  const q = searchQuery.trim()
+                  clearSearch()
+                  router.push(`/explore?q=${encodeURIComponent(q)}`)
                 }}
                 className="flex w-full items-center gap-2.5 border-t border-line px-3 py-2.5 text-[14px] font-semibold text-tiktok hover:bg-surface-subtle"
               >

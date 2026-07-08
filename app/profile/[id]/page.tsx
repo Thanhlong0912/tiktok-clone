@@ -10,6 +10,7 @@ import useGetFollowers from "@/app/hooks/useGetFollowers"
 import useGetFollowing from "@/app/hooks/useGetFollowing"
 import useGetLikedPosts from "@/app/hooks/useGetLikedPosts"
 import useGetLikesByPostId from "@/app/hooks/useGetLikesByPostId"
+import useGetRepostedPosts from "@/app/hooks/useGetRepostedPosts"
 import useGetSavedPosts from "@/app/hooks/useGetSavedPosts"
 import useIsFollowing from "@/app/hooks/useIsFollowing"
 import MainLayout from "@/app/layouts/MainLayout"
@@ -34,10 +35,11 @@ const Profile = ({ params }: ProfilePageTypes) => {
     const [followersCount, setFollowersCount] = useState<number>(0)
     const [followingCount, setFollowingCount] = useState<number>(0)
     const [likesCount, setLikesCount] = useState<number>(0)
-    type ProfileTab = 'posts' | 'liked' | 'saved'
+    type ProfileTab = 'posts' | 'liked' | 'saved' | 'reposts'
     const [activeTab, setActiveTab] = useState<ProfileTab>('posts')
     const [likedPosts, setLikedPosts] = useState<PostWithProfile[]>([])
     const [savedPosts, setSavedPosts] = useState<PostWithProfile[]>([])
+    const [repostedPosts, setRepostedPosts] = useState<PostWithProfile[]>([])
     const [isLoadingTab, setIsLoadingTab] = useState<boolean>(false)
     const isOwnProfile = contextUser?.user?.id == params?.id
 
@@ -91,6 +93,8 @@ const Profile = ({ params }: ProfilePageTypes) => {
             try {
                 if (activeTab === 'liked') {
                     setLikedPosts(await useGetLikedPosts(params.id))
+                } else if (activeTab === 'reposts') {
+                    setRepostedPosts(await useGetRepostedPosts(params.id))
                 } else {
                     setSavedPosts(await useGetSavedPosts(params.id))
                 }
@@ -234,6 +238,7 @@ const Profile = ({ params }: ProfilePageTypes) => {
                     { id: 'posts' as const, label: 'Posts' },
                     { id: 'liked' as const, label: 'Liked' },
                     ...(isOwnProfile ? [{ id: 'saved' as const, label: 'Saved' }] : []),
+                    { id: 'reposts' as const, label: 'Reposts' },
                 ]).map((tab) => (
                     <li
                         key={tab.id}
@@ -262,6 +267,12 @@ const Profile = ({ params }: ProfilePageTypes) => {
                             savedPosts.map((post) => <PostUser key={post.id} post={post} />)
                         ) : (
                             <div className="text-ink-soft font-light text-[15px]">No saved posts yet</div>
+                        )
+                    ) : activeTab === 'reposts' ? (
+                        repostedPosts.length > 0 ? (
+                            repostedPosts.map((post) => <PostUser key={post.id} post={post} />)
+                        ) : (
+                            <div className="text-ink-soft font-light text-[15px]">No reposts yet</div>
                         )
                     ) : postsByUser?.length > 0 ? (
                         postsByUser.map((post) => <PostUser key={post.id} post={post} />)

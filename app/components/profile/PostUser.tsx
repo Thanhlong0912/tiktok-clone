@@ -1,10 +1,11 @@
 import useCreateBucketUrl from '@/app/hooks/useCreateBucketUrl'
 import { PostUserCompTypes } from "@/app/types"
-import { getImagePostIds, isImagePost } from '@/app/utils/postMedia'
+import { getImagePostAudioId, getImagePostIds, isImagePost } from '@/app/utils/postMedia'
 import { pauseOtherVideos, pauseVideosDuringNavigation, rememberVideoPlayback } from '@/app/utils/videoPlayback'
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 import { AiFillHeart, AiOutlineLoading3Quarters } from "react-icons/ai"
+import CaptionText from '../CaptionText'
 import ImageSlideshow from '../ImageSlideshow'
 import { formatCount } from '@/app/utils/formatNumber'
 import { getPostLikeCount } from '@/app/utils/postLikeCounts'
@@ -12,6 +13,7 @@ import { getPostLikeCount } from '@/app/utils/postLikeCounts'
 const PostUser = ({ post }: PostUserCompTypes) => {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const [likeCount, setLikeCount] = useState<number | null>(null)
+  const [isHovering, setIsHovering] = useState<boolean>(false)
 
   useEffect(() => {
     let cancelled = false
@@ -28,34 +30,36 @@ const PostUser = ({ post }: PostUserCompTypes) => {
   }, [post.id])
 
   useEffect(() => {
-    const video = videoRef.current
-
-    if (!video) {
-      return
-    }
-
-    const handleMouseEnter = () => {
-      pauseOtherVideos(video)
-      video.play().catch(() => null)
-    }
-
-    const handleMouseLeave = () => {
-      video.pause()
-    }
-
-    const timer = setTimeout(() => {
-      video.addEventListener('mouseenter', handleMouseEnter)
-      video.addEventListener('mouseleave', handleMouseLeave)
-    }, 50)
-
     return () => {
-      clearTimeout(timer)
-      video.removeEventListener('mouseenter', handleMouseEnter)
-      video.removeEventListener('mouseleave', handleMouseLeave)
-      video.pause()
+      videoRef.current?.pause()
     }
-
   }, [post?.id])
+
+  // Hover previews play with music; if the browser blocks unmuted autoplay we
+  // retry muted so the preview still runs.
+  const handleHoverStart = () => {
+    setIsHovering(true)
+
+    const video = videoRef.current
+    if (!video) return
+
+    pauseOtherVideos(video)
+    video.muted = false
+    video.play().catch(() => {
+      video.muted = true
+      video.play().catch(() => null)
+    })
+  }
+
+  const handleHoverEnd = () => {
+    setIsHovering(false)
+
+    const video = videoRef.current
+    if (!video) return
+
+    video.pause()
+    video.muted = true
+  }
 
   const openPostDetail = () => {
     rememberVideoPlayback({
@@ -69,10 +73,15 @@ const PostUser = ({ post }: PostUserCompTypes) => {
 
   const postIsImage = isImagePost(post.video_url)
   const postImageIds = getImagePostIds(post.video_url)
+  const postAudioId = getImagePostAudioId(post.video_url)
 
   return (
     <>
-      <div className="relative brightness-90 hover:brightness-[1.1] cursor-pointer">
+      <div
+        className="relative brightness-90 hover:brightness-[1.1] cursor-pointer"
+        onMouseEnter={handleHoverStart}
+        onMouseLeave={handleHoverEnd}
+      >
           {!post.video_url ? (
               <div className="absolute flex items-center justify-center top-0 left-0 aspect-[3/4] w-full object-cover rounded-md bg-surface-subtle">
                   <AiOutlineLoading3Quarters className="animate-spin ml-1" size="80" color="#FFFFFF" />
@@ -82,7 +91,9 @@ const PostUser = ({ post }: PostUserCompTypes) => {
                   <div className="relative aspect-[3/4] w-full overflow-hidden rounded-md bg-black">
                       <ImageSlideshow
                           imageIds={postImageIds}
-                          autoPlay={false}
+                          audioId={postAudioId}
+                          muted={false}
+                          autoPlay={isHovering}
                           showControls={false}
                           showDots={false}
                           className="h-full w-full rounded-md"
@@ -103,6 +114,7 @@ const PostUser = ({ post }: PostUserCompTypes) => {
                       id={`video${post.id}`}
                       loop
                       muted
+                      playsInline
                       className="aspect-[3/4] object-cover rounded-md"
                       src={useCreateBucketUrl(post.video_url)}
                   />
@@ -110,7 +122,7 @@ const PostUser = ({ post }: PostUserCompTypes) => {
           )}
           <div className="px-1">
               <p className="text-ink text-[15px] pt-1 break-words">
-                  {post.text}
+                  <CaptionText text={post.text} />
               </p>
               {likeCount !== null ? (
                   <div className="flex items-center gap-1 text-ink-soft font-semibold text-xs">

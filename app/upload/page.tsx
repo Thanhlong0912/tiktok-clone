@@ -7,6 +7,7 @@ import { BiImageAdd, BiLoaderCircle, BiSolidCloudUpload, BiVideoPlus } from "rea
 import { ImMusic } from "react-icons/im"
 import { PiKnifeLight } from 'react-icons/pi'
 import ImageSlideshow from '../components/ImageSlideshow'
+import CaptionComposer from '../components/upload/CaptionComposer'
 import { useUser } from '../context/user'
 import useCreatePost from '../hooks/useCreatePost'
 import UploadLayout from '../layouts/UploadLayout'
@@ -557,26 +558,11 @@ const Upload = () => {
                         ) : null}
 
                         <div className="mt-5">
-                            <div className="flex items-center justify-between">
-                                <div className="mb-1 text-[15px] text-ink">Caption</div>
-                                <div className="text-ink-soft text-[12px]">{caption.length}/150</div>
-                            </div>
-                            <input
-                                maxLength={150}
-                                type="text"
-                                className="
-                                    w-full
-                                    border
-                                    border-line
-                                    p-2.5
-                                    rounded-md
-                                    focus:outline-none
-                                    bg-surface
-                                    text-ink
-                                "
-                                value={caption}
-                                onChange={event => setCaption(event.target.value)}
-                            />
+                            <div className="mb-1 text-[15px] text-ink">Caption</div>
+                            <CaptionComposer value={caption} onChange={setCaption} maxLength={150} />
+                            <p className="mt-1 text-[12px] text-ink-soft">
+                                Use # to add hashtags people can filter in Explore, and @ to mention creators.
+                            </p>
                         </div>
 
                         <div className="flex gap-3">

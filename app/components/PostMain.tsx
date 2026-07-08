@@ -33,6 +33,7 @@ import { CommentWithProfile, Like, PostMainCompTypes } from '../types'
 import { pauseOtherVideos, pauseVideosDuringNavigation, rememberVideoPlayback } from '../utils/videoPlayback'
 import { getVideoSoundEnabled, setVideoSoundEnabled, subscribeToVideoSoundPreference } from '../utils/videoSoundPreference'
 import { getImagePostAudioId, getImagePostIds, isImagePost } from '../utils/postMedia'
+import CaptionText from './CaptionText'
 import ImageSlideshow from './ImageSlideshow'
 import VideoOptionsMenu from './VideoOptionsMenu'
 
@@ -242,6 +243,7 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
       // rollback
       setUserSaved(wasSaved)
       setSavesCount((c) => Math.max(0, c + (wasSaved ? 1 : -1)))
+      showToast(wasSaved ? 'Could not remove from saved' : 'Could not save video', 'error')
     } finally {
       setIsSaveLoading(false)
     }
@@ -270,6 +272,7 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
       console.error(error)
       setUserReposted(wasReposted)
       setRepostCount((c) => Math.max(0, c + (wasReposted ? 1 : -1)))
+      showToast(wasReposted ? 'Could not remove repost' : 'Could not repost video', 'error')
     } finally {
       setIsRepostLoading(false)
     }
@@ -281,6 +284,22 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
       setVideoProgress((video.currentTime / video.duration) * 100)
     }
   }, [])
+
+  // Lets the viewer choose a position in the video by tapping/dragging the bar.
+  const seekVideoFromPointer = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>, targetVideo: HTMLVideoElement | null) => {
+      if (!targetVideo || !Number.isFinite(targetVideo.duration) || targetVideo.duration <= 0) {
+        return
+      }
+
+      const rect = event.currentTarget.getBoundingClientRect()
+      const fraction = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
+
+      targetVideo.currentTime = fraction * targetVideo.duration
+      setVideoProgress(fraction * 100)
+    },
+    []
+  )
 
   useEffect(() => {
     const postMainElement = postMainRef.current
@@ -764,15 +783,30 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
           onAutoScrollChange={onAutoScrollChange}
           postId={post.id}
           postUserId={post.profile.user_id}
+          onGoToPost={openPostDetail}
           className="absolute right-4 top-[calc(env(safe-area-inset-top)+16px)]"
         />
 
         {!postIsImage ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+56px)] z-20 h-[3px] bg-white/20">
-            <div
-              className="h-full bg-white transition-[width] duration-150 ease-linear"
-              style={{ width: `${videoProgress}%` }}
-            />
+          <div
+            className="absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+56px)] z-20 flex h-6 cursor-pointer touch-none items-end"
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId)
+              seekVideoFromPointer(event, videoRef.current)
+            }}
+            onPointerMove={(event) => {
+              if (event.buttons > 0) {
+                seekVideoFromPointer(event, videoRef.current)
+              }
+            }}
+            aria-label="Video progress"
+          >
+            <div className="h-[3px] w-full bg-white/20">
+              <div
+                className="h-full bg-[#ff2a53] transition-[width] duration-150 ease-linear"
+                style={{ width: `${videoProgress}%` }}
+              />
+            </div>
           </div>
         ) : null}
 
@@ -800,7 +834,9 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
             ) : null}
           </div>
 
-          <p className="max-w-[72%] text-[14px] leading-5 text-white/95">{post.text}</p>
+          <p className="max-w-[72%] text-[14px] leading-5 text-white/95">
+            <CaptionText text={post.text} />
+          </p>
           <p className="mt-2 flex items-center text-[13px] font-medium text-white/90">
             <ImMusic size={14} />
             <span className="ml-1 truncate pr-2">original sound - {post.profile.name}</span>
@@ -972,6 +1008,7 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
               onAutoScrollChange={onAutoScrollChange}
               postId={post.id}
               postUserId={post.profile.user_id}
+              onGoToPost={openPostDetail}
               className="absolute right-3 top-3"
             />
 
@@ -1037,7 +1074,9 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
                   </button>
                 ) : null}
               </div>
-              <p className="line-clamp-2 max-w-[86%] text-[14px] leading-5 text-white/95">{post.text}</p>
+              <p className="line-clamp-2 max-w-[86%] text-[14px] leading-5 text-white/95">
+                <CaptionText text={post.text} />
+              </p>
               <p className="mt-2 flex items-center text-[13px] font-medium text-white/90">
                 <ImMusic size={14} />
                 <span className="ml-1.5 truncate">original sound - {post.profile.name}</span>
@@ -1060,11 +1099,25 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
             ) : null}
 
             {!postIsImage ? (
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-1 bg-white/25">
-                <div
-                  className="h-full bg-white transition-[width] duration-150 ease-linear"
-                  style={{ width: `${videoProgress}%` }}
-                />
+              <div
+                className="absolute inset-x-0 bottom-0 z-20 flex h-5 cursor-pointer touch-none items-end"
+                onPointerDown={(event) => {
+                  event.currentTarget.setPointerCapture(event.pointerId)
+                  seekVideoFromPointer(event, desktopVideoRef.current)
+                }}
+                onPointerMove={(event) => {
+                  if (event.buttons > 0) {
+                    seekVideoFromPointer(event, desktopVideoRef.current)
+                  }
+                }}
+                aria-label="Video progress"
+              >
+                <div className="h-1 w-full bg-white/25">
+                  <div
+                    className="h-full bg-[#ff2a53] transition-[width] duration-150 ease-linear"
+                    style={{ width: `${videoProgress}%` }}
+                  />
+                </div>
               </div>
             ) : null}
           </div>
@@ -1140,10 +1193,11 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
             aria-label="Close share sheet"
             className="absolute inset-0"
           />
-          <div className="tt-sheet-up relative w-full rounded-t-2xl bg-surface px-4 pt-4 text-ink md:w-[400px] md:rounded-2xl md:pb-4">
+          {/* Explicit light styling + shadow so the sheet stays visible over dark video in any theme */}
+          <div className="tt-sheet-up relative w-full rounded-t-2xl bg-white px-4 pt-4 text-[#161823] shadow-[0_12px_48px_rgba(0,0,0,0.4)] md:w-[400px] md:rounded-2xl md:pb-4">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-sm font-semibold">Share to</p>
-              <button onClick={() => setIsShareSheetOpen(false)} className="rounded-full bg-surface-subtle p-1" aria-label="Close">
+              <button onClick={() => setIsShareSheetOpen(false)} className="rounded-full bg-[#f1f1f2] p-1" aria-label="Close">
                 <IoClose size={22} />
               </button>
             </div>
@@ -1160,20 +1214,14 @@ const PostMain = ({ post, feedIndex, isAutoScrollEnabled, onVideoEnded, onAutoSc
               ) : null}
               <button
                 onClick={copyPostLink}
-                className="flex w-full items-center justify-center gap-2 rounded-full border border-line px-4 py-2.5 text-sm font-semibold hover:bg-surface-subtle"
+                className="flex w-full items-center justify-center gap-2 rounded-full border border-[#e3e3e4] px-4 py-2.5 text-sm font-semibold hover:bg-[#f1f1f2]"
               >
                 <FaRegCopy size={14} />
                 Copy link
               </button>
               <button
-                onClick={openPostDetail}
-                className="w-full rounded-full bg-ink px-4 py-2.5 text-sm font-semibold text-surface"
-              >
-                Go to post
-              </button>
-              <button
                 onClick={() => setIsShareSheetOpen(false)}
-                className="w-full rounded-full bg-surface-subtle px-4 py-2.5 text-sm font-semibold"
+                className="w-full rounded-full bg-[#f1f1f2] px-4 py-2.5 text-sm font-semibold"
               >
                 Cancel
               </button>

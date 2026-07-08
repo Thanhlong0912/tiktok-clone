@@ -8,14 +8,22 @@ import { useCommentStore } from '@/app/stores/comment'
 import { useGeneralStore } from '@/app/stores/general'
 import { useLikeStore } from '@/app/stores/like'
 import { CommentsHeaderCompTypes } from '@/app/types'
+import {
+  INTERACTION_EVENT,
+  createInteraction,
+  deleteInteraction,
+  getInteractionsByPost,
+} from '@/app/utils/socialInteractions'
+import { showToast } from '@/app/utils/toast'
 import moment from 'moment'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import { AiFillHeart } from "react-icons/ai"
+import { useCallback, useEffect, useState } from 'react'
+import { AiFillHeart, AiOutlineRetweet } from "react-icons/ai"
 import { BiLoaderCircle } from "react-icons/bi"
-import { BsChatDots, BsTrash3 } from "react-icons/bs"
+import { BsBookmark, BsBookmarkFill, BsChatDots, BsTrash3 } from "react-icons/bs"
 import { ImMusic } from "react-icons/im"
+import CaptionText from '../CaptionText'
 import ClientOnly from '../ClientOnly'
 
 const CommentsHeader = ({ post, params, isMobileDetail = false }: CommentsHeaderCompTypes) => {
@@ -29,6 +37,106 @@ const CommentsHeader = ({ post, params, isMobileDetail = false }: CommentsHeader
     const [hasClickedLike, setHasClickedLike] = useState<boolean>(false)
     const [isDeleteing, setIsDeleteing] = useState<boolean>(false)
     const [userLiked, setUserLiked] = useState<boolean>(false)
+
+    const [userSaved, setUserSaved] = useState<boolean>(false)
+    const [saveId, setSaveId] = useState<string | null>(null)
+    const [savesCount, setSavesCount] = useState<number>(0)
+    const [isSaveLoading, setIsSaveLoading] = useState<boolean>(false)
+    const [userReposted, setUserReposted] = useState<boolean>(false)
+    const [repostId, setRepostId] = useState<string | null>(null)
+    const [repostCount, setRepostCount] = useState<number>(0)
+    const [isRepostLoading, setIsRepostLoading] = useState<boolean>(false)
+
+    const userId = contextUser?.user?.id
+
+    const syncInteractions = useCallback(async () => {
+        try {
+            const [saves, reposts] = await Promise.all([
+                getInteractionsByPost('save', params.postId),
+                getInteractionsByPost('repost', params.postId),
+            ])
+
+            setSavesCount(saves.length)
+            setRepostCount(reposts.length)
+
+            const mySave = userId ? saves.find((s) => s.user_id === userId) : undefined
+            const myRepost = userId ? reposts.find((r) => r.user_id === userId) : undefined
+            setUserSaved(Boolean(mySave))
+            setSaveId(mySave?.id || null)
+            setUserReposted(Boolean(myRepost))
+            setRepostId(myRepost?.id || null)
+        } catch (error) {
+            console.error(error)
+        }
+    }, [params.postId, userId])
+
+    useEffect(() => {
+        syncInteractions()
+
+        if (typeof window === 'undefined') return
+
+        const handler = () => syncInteractions()
+        window.addEventListener(INTERACTION_EVENT, handler)
+        return () => window.removeEventListener(INTERACTION_EVENT, handler)
+    }, [syncInteractions])
+
+    const toggleSave = useCallback(async () => {
+        if (!userId) {
+            setIsLoginOpen(true)
+            return
+        }
+        if (isSaveLoading) return
+
+        setIsSaveLoading(true)
+        const wasSaved = userSaved
+        setUserSaved(!wasSaved)
+        setSavesCount((c) => Math.max(0, c + (wasSaved ? -1 : 1)))
+        try {
+            if (wasSaved && saveId) {
+                await deleteInteraction('save', saveId)
+                setSaveId(null)
+            } else if (!wasSaved) {
+                const id = await createInteraction('save', userId, params.postId)
+                setSaveId(id)
+            }
+        } catch (error) {
+            console.error(error)
+            setUserSaved(wasSaved)
+            setSavesCount((c) => Math.max(0, c + (wasSaved ? 1 : -1)))
+            showToast(wasSaved ? 'Could not remove from saved' : 'Could not save video', 'error')
+        } finally {
+            setIsSaveLoading(false)
+        }
+    }, [isSaveLoading, params.postId, saveId, setIsLoginOpen, userId, userSaved])
+
+    const toggleRepost = useCallback(async () => {
+        if (!userId) {
+            setIsLoginOpen(true)
+            return
+        }
+        if (isRepostLoading) return
+
+        setIsRepostLoading(true)
+        const wasReposted = userReposted
+        setUserReposted(!wasReposted)
+        setRepostCount((c) => Math.max(0, c + (wasReposted ? -1 : 1)))
+        try {
+            if (wasReposted && repostId) {
+                await deleteInteraction('repost', repostId)
+                setRepostId(null)
+            } else if (!wasReposted) {
+                const id = await createInteraction('repost', userId, params.postId)
+                setRepostId(id)
+            }
+        } catch (error) {
+            console.error(error)
+            setUserReposted(wasReposted)
+            setRepostCount((c) => Math.max(0, c + (wasReposted ? 1 : -1)))
+            showToast(wasReposted ? 'Could not remove repost' : 'Could not repost video', 'error')
+        } finally {
+            setIsRepostLoading(false)
+        }
+    }, [isRepostLoading, params.postId, repostId, setIsLoginOpen, userId, userReposted])
 
     useEffect(() => {
         setCommentsByPost(params?.postId)
@@ -145,7 +253,9 @@ const CommentsHeader = ({ post, params, isMobileDetail = false }: CommentsHeader
         ) : null}
       </div>
 
-      <p className={`px-4 text-sm text-ink lg:px-8 ${isMobileDetail ? 'mt-2' : 'mt-3 lg:mt-4'}`}>{post?.text}</p>
+      <p className={`px-4 text-sm text-ink lg:px-8 ${isMobileDetail ? 'mt-2' : 'mt-3 lg:mt-4'}`}>
+          <CaptionText text={post?.text} />
+      </p>
 
       <p className={`flex item-center gap-2 px-4 text-sm font-bold text-ink lg:px-8 ${isMobileDetail ? 'mt-2' : 'mt-3 lg:mt-4'}`}>
           <ImMusic size="17"/>
@@ -176,8 +286,38 @@ const CommentsHeader = ({ post, params, isMobileDetail = false }: CommentsHeader
               <div className="cursor-pointer rounded-full bg-surface-subtle p-2">
                   <BsChatDots size={25} />
               </div>
-              <span className="pl-2 text-xs font-semibold text-ink">{commentsByPost?.length}</span>
+              <span className="pr-4 pl-2 text-xs font-semibold text-ink">{commentsByPost?.length}</span>
           </div>
+
+          <ClientOnly>
+              <div className="pb-4 text-center flex items-center">
+                  <button
+                      disabled={isSaveLoading}
+                      onClick={() => toggleSave()}
+                      aria-label={userSaved ? 'Remove from saved' : 'Save video'}
+                      className="cursor-pointer rounded-full bg-surface-subtle p-2 disabled:opacity-60"
+                  >
+                      {userSaved ? (
+                          <BsBookmarkFill color="#ffc60a" size="25" className="tt-pop" />
+                      ) : (
+                          <BsBookmark size="25" />
+                      )}
+                  </button>
+                  <span className="pr-4 pl-2 text-xs font-semibold text-ink">{savesCount}</span>
+              </div>
+
+              <div className="pb-4 text-center flex items-center">
+                  <button
+                      disabled={isRepostLoading}
+                      onClick={() => toggleRepost()}
+                      aria-label={userReposted ? 'Remove repost' : 'Repost video'}
+                      className="cursor-pointer rounded-full bg-surface-subtle p-2 disabled:opacity-60"
+                  >
+                      <AiOutlineRetweet color={userReposted ? '#25c2c2' : undefined} size="25" />
+                  </button>
+                  <span className="pl-2 text-xs font-semibold text-ink">{repostCount}</span>
+              </div>
+          </ClientOnly>
       </div>
     </>
   )
