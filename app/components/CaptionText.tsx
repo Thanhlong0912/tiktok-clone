@@ -14,7 +14,11 @@ type CaptionTextProps = {
   linkify?: boolean
 }
 
-/** Links to the mentioned user's profile once resolved; account search until then. */
+/**
+ * Links to the mentioned user's profile once resolved. Mentions that don't
+ * match a real account stay plain text — you can't mention someone who
+ * doesn't exist.
+ */
 const MentionLink = ({ token }: { token: string }) => {
   const name = token.slice(1)
   const [userId, setUserId] = useState<string | null>(null)
@@ -31,9 +35,13 @@ const MentionLink = ({ token }: { token: string }) => {
     }
   }, [name])
 
+  if (!userId) {
+    return <span className="font-semibold">{token}</span>
+  }
+
   return (
     <Link
-      href={userId ? `/profile/${userId}` : `/explore?q=${encodeURIComponent(name)}`}
+      href={`/profile/${userId}`}
       onClick={(event) => event.stopPropagation()}
       className="font-semibold hover:underline"
     >

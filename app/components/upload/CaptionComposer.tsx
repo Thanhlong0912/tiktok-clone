@@ -4,11 +4,13 @@ import { debounce } from 'debounce'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BsHash } from 'react-icons/bs'
 import { HiOutlineAtSymbol } from 'react-icons/hi'
+import { useUser } from '../../context/user'
 import useCreateBucketUrl from '../../hooks/useCreateBucketUrl'
+import useGetRandomUsers from '../../hooks/useGetRandomUsers'
 import useSearchProfilesByName from '../../hooks/useSearchProfilesByName'
 import { usePostStore } from '../../stores/post'
 import { RandomUsers } from '../../types'
-import { rememberMention } from '../../utils/mentions'
+import { foldName, rememberMention } from '../../utils/mentions'
 import { getTrendingTags, searchTags } from '../../utils/postTags'
 
 type ActiveToken = {
@@ -54,8 +56,49 @@ const CaptionComposer = ({
 }: CaptionComposerProps) => {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const { allPosts } = usePostStore()
+  const contextUser = useUser()
   const [activeToken, setActiveToken] = useState<ActiveToken | null>(null)
-  const [mentionResults, setMentionResults] = useState<RandomUsers[]>([])
+  const [candidateUsers, setCandidateUsers] = useState<RandomUsers[]>([])
+  const [remoteMentionResults, setRemoteMentionResults] = useState<RandomUsers[]>([])
+
+  // Users offered as soon as "@" is typed: creators from the cached feed
+  // plus a handful from the profile collection.
+  useEffect(() => {
+    let active = true
+
+    const loadCandidates = async () => {
+      const seen: Record<string, boolean> = {}
+      const merged: RandomUsers[] = []
+
+      allPosts.forEach((post) => {
+        const profile = post.profile
+        if (profile?.user_id && !seen[profile.user_id]) {
+          seen[profile.user_id] = true
+          merged.push({ id: profile.user_id, name: profile.name, image: profile.image })
+        }
+      })
+
+      try {
+        const random = (await useGetRandomUsers()) || []
+        random.forEach((user) => {
+          if (user?.id && !seen[user.id]) {
+            seen[user.id] = true
+            merged.push(user)
+          }
+        })
+      } catch {
+        // Feed profiles alone are still a useful list.
+      }
+
+      if (active) setCandidateUsers(merged)
+    }
+
+    loadCandidates()
+
+    return () => {
+      active = false
+    }
+  }, [allPosts])
 
   const syncActiveToken = () => {
     const el = textareaRef.current
@@ -78,9 +121,9 @@ const CaptionComposer = ({
       debounce(async (query: string) => {
         try {
           const res = await useSearchProfilesByName(query)
-          setMentionResults(res || [])
+          setRemoteMentionResults(res || [])
         } catch {
-          setMentionResults([])
+          setRemoteMentionResults([])
         }
       }, 300),
     []
@@ -90,9 +133,31 @@ const CaptionComposer = ({
     if (activeToken?.kind === 'mention' && activeToken.query) {
       searchMentions(activeToken.query)
     } else {
-      setMentionResults([])
+      setRemoteMentionResults([])
     }
   }, [activeToken, searchMentions])
+
+  // Only real accounts can be mentioned: the list merges known users with
+  // remote search results, filters accent-insensitively, and never offers
+  // the creator their own account.
+  const mentionSuggestions = useMemo(() => {
+    if (activeToken?.kind !== 'mention') return []
+
+    const selfId = contextUser?.user?.id
+    const seen: Record<string, boolean> = {}
+    const pool = [...candidateUsers, ...remoteMentionResults].filter((user) => {
+      if (!user?.id || user.id === selfId || seen[user.id]) return false
+      seen[user.id] = true
+      return true
+    })
+
+    const query = foldName(activeToken.query)
+    const matches = query
+      ? pool.filter((user) => foldName(user.name || '').includes(query))
+      : pool
+
+    return matches.slice(0, 5)
+  }, [activeToken, candidateUsers, contextUser?.user?.id, remoteMentionResults])
 
   const focusAt = (position: number) => {
     requestAnimationFrame(() => {
@@ -134,7 +199,7 @@ const CaptionComposer = ({
 
   const hasSuggestions =
     (activeToken?.kind === 'hashtag' && tagSuggestions.length > 0) ||
-    (activeToken?.kind === 'mention' && mentionResults.length > 0)
+    (activeToken?.kind === 'mention' && mentionSuggestions.length > 0)
 
   return (
     <div className="relative">
@@ -226,7 +291,7 @@ const CaptionComposer = ({
                   <span className="text-[14px] font-semibold text-ink">#{tag}</span>
                 </button>
               ))
-            : mentionResults.map((profile) => (
+            : mentionSuggestions.map((profile) => (
                 <button
                   key={profile.id}
                   type="button"

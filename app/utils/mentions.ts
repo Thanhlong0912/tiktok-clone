@@ -19,6 +19,12 @@ const resolutionCache = new Map<string, Promise<string | null>>()
 /** Canonical comparison key for a display name or mention. */
 export const mentionKey = (name: string) => name.replace(/[\s@]+/g, '').toLowerCase()
 
+/** Accent-insensitive key so "thanh" matches "Thành" while filtering. */
+export const foldName = (name: string) =>
+  mentionKey(name)
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+
 export function rememberMention(name: string, userId: string) {
   if (typeof window === 'undefined') return
   try {
