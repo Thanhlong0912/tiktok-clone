@@ -6,7 +6,7 @@
 
 **Architecture:** A new `libs/storage/` module exposes a three-method `StorageAdapter` interface (`upload`, `remove`, `publicUrl`) implemented against the AWS SDK. Browser uploads authenticate with Supabase's session-token mode, which is RLS-enforced and needs no server route. Bulk copy operations are delegated to `rclone` via a documented runbook; only orphan detection, which must join bucket contents against database rows, gets custom code.
 
-**Tech Stack:** TypeScript, Next.js 13 (App Router, client-side only — no API routes), `@aws-sdk/client-s3`, `@aws-sdk/lib-storage`, Vitest, `aws-sdk-client-mock`, `tsx`.
+**Tech Stack:** TypeScript, Next.js 13 (App Router, client-side only — no API routes), `@aws-sdk/client-s3`, `@aws-sdk/lib-storage`, Vitest, `tsx`.
 
 **Spec:** `docs/superpowers/specs/2026-08-11-s3-storage-design.md`
 
@@ -22,6 +22,8 @@
 - `useCreateBucketUrl`'s exported signature must not change — 14 files import it.
 - Tests import from `vitest` explicitly rather than relying on globals, so no `tsconfig.json` changes are needed.
 - **Known limitation:** project-ref derivation assumes a hosted `<ref>.supabase.co` URL. Local Supabase (`http://127.0.0.1:54321`) is not supported by this plan and will throw a clear error rather than silently produce a wrong ref.
+- `tsconfig.json` sets `"target": "es5"` without `downlevelIteration`. Do not iterate a `Set` or `Map` directly (`for...of`, spread) — it will not compile. Arrays are fine. Use `.has()` / `.add()` / `.size` on sets, as every code block in this plan does.
+- `tsconfig.json` has `"include": ["**/*.ts"]`, so `npx tsc --noEmit` typechecks test files and `vitest.config.ts` too. Both must compile cleanly, not just app code.
 
 ---
 
@@ -72,7 +74,7 @@
 
 ```bash
 npm install @aws-sdk/client-s3 @aws-sdk/lib-storage
-npm install -D vitest aws-sdk-client-mock tsx
+npm install -D vitest tsx
 ```
 
 - [ ] **Step 2: Create the Vitest config**
@@ -556,13 +558,20 @@ git commit -m "add session-token credential provider with jwt expiry"
 
 - [ ] **Step 1: Write the failing test**
 
-Create `libs/storage/s3Adapter.test.ts`. The SDK loader is injected so the test never touches the network:
+Create `libs/storage/s3Adapter.test.ts`. The SDK loader is injected so the test never touches the network.
+
+Note how progress events are emitted from inside the fake's `done()` rather than from the test body. The adapter `await`s the dynamic SDK import before constructing `Upload`, so the instance does not exist yet at the moment `adapter.upload()` is called — a test that reaches for `uploads[0]` synchronously gets `undefined`.
 
 ```ts
 import { describe, expect, it, vi } from 'vitest'
 import { createS3Adapter } from './s3Adapter'
 
-const makeAdapter = (overrides: { uploadImpl?: any } = {}) => {
+type ProgressEvent = { loaded?: number; total?: number }
+
+const makeAdapter = (overrides: {
+    progressEvents?: ProgressEvent[]
+    failWith?: Error
+} = {}) => {
     const sent: any[] = []
     const uploads: any[] = []
 
@@ -579,18 +588,26 @@ const makeAdapter = (overrides: { uploadImpl?: any } = {}) => {
     }
 
     class FakeUpload {
-        private handlers: Record<string, (event: any) => void> = {}
+        handlers: Record<string, (event: any) => void> = {}
+        abort = vi.fn().mockResolvedValue(undefined)
+
         constructor(public params: any) {
             uploads.push(this)
         }
+
         on(event: string, handler: (event: any) => void) {
             this.handlers[event] = handler
         }
-        emit(event: string, payload: any) {
-            this.handlers[event]?.(payload)
+
+        async done() {
+            for (const event of overrides.progressEvents ?? []) {
+                this.handlers.httpUploadProgress?.(event)
+            }
+            if (overrides.failWith) {
+                throw overrides.failWith
+            }
+            return {}
         }
-        done = overrides.uploadImpl ?? vi.fn().mockResolvedValue({})
-        abort = vi.fn().mockResolvedValue(undefined)
     }
 
     const adapter = createS3Adapter({
@@ -645,16 +662,14 @@ describe('createS3Adapter.upload', () => {
 
     it('converts byte progress into a percentage', async () => {
         const onProgress = vi.fn()
-        const { adapter, uploads } = makeAdapter({
-            uploadImpl: vi.fn().mockImplementation(async function (this: any) {
-                return {}
-            }),
+        const { adapter } = makeAdapter({
+            progressEvents: [
+                { loaded: 25, total: 100 },
+                { loaded: 50, total: 100 },
+            ],
         })
 
-        const pending = adapter.upload('abc123', file(), { onProgress })
-        uploads[0].emit('httpUploadProgress', { loaded: 25, total: 100 })
-        uploads[0].emit('httpUploadProgress', { loaded: 50, total: 100 })
-        await pending
+        await adapter.upload('abc123', file(), { onProgress })
 
         expect(onProgress).toHaveBeenCalledWith(25)
         expect(onProgress).toHaveBeenCalledWith(50)
@@ -663,11 +678,9 @@ describe('createS3Adapter.upload', () => {
 
     it('ignores progress events with no total', async () => {
         const onProgress = vi.fn()
-        const { adapter, uploads } = makeAdapter()
+        const { adapter } = makeAdapter({ progressEvents: [{ loaded: 25 }] })
 
-        const pending = adapter.upload('abc123', file(), { onProgress })
-        uploads[0].emit('httpUploadProgress', { loaded: 25 })
-        await pending
+        await adapter.upload('abc123', file(), { onProgress })
 
         expect(onProgress).toHaveBeenCalledTimes(1)
         expect(onProgress).toHaveBeenCalledWith(100)
@@ -675,7 +688,7 @@ describe('createS3Adapter.upload', () => {
 
     it('aborts the multipart upload when it fails, then rethrows', async () => {
         const { adapter, uploads } = makeAdapter({
-            uploadImpl: vi.fn().mockRejectedValue(new Error('network down')),
+            failWith: new Error('network down'),
         })
 
         await expect(adapter.upload('abc123', file())).rejects.toThrow('network down')
@@ -1616,6 +1629,7 @@ No spec requirement is unassigned.
 1. The spec described `planOrphans` as taking the reference set and mentioned the zero-row guard alongside it. The plan splits reference-set construction into `references.ts` (which owns the guard) and the diff into `planOrphans.ts`. This matches the spec's own corrected testing section.
 2. The spec did not mention chunking `DeleteObjects` at 1000 keys. That is a hard S3 API limit; without chunking, orphan cleanup on a large bucket would fail. Added in Tasks 4 and 7.
 3. The spec did not specify local Supabase support. `getProjectRef` throws a clear error rather than silently deriving `127` from `127.0.0.1`. Recorded in Global Constraints.
+4. The spec named `aws-sdk-client-mock` for adapter tests. The plan injects a `loadSdk` seam instead and uses hand-rolled fakes, because `aws-sdk-client-mock` patches a client instance and cannot intercept one constructed behind a dynamic `import()`. The dependency is not installed.
 
 **Type consistency:** `StorageAdapter` (Task 2) is implemented in Task 4 and consumed in Task 5 with matching signatures. `BucketObject` is defined in `planOrphans.ts` (Task 6) and imported by `orphans.ts` (Task 7). `getS3Endpoint` (Task 1) is used in Tasks 4 and 7 with the same single-string signature. `buildPublicUrl` (Task 2) is consumed in Task 4. `createSessionCredentialProvider` takes the same options object in Tasks 3 and 4.
 
