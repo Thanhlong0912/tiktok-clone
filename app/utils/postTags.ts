@@ -1,6 +1,6 @@
 /**
  * Tags are stored TikTok-style as #hashtags appended to the post caption
- * (`text` attribute). This avoids any Appwrite schema change: old posts keep
+ * (`text` column). This avoids any schema change: old posts keep
  * working and Explore/search can filter by parsing the caption.
  */
 

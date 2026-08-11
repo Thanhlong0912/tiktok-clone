@@ -1,11 +1,10 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { account, ID } from "@/libs/AppWriteClient"
+import { supabase } from "@/libs/supabase"
 import { User, UserContextTypes } from '../types';
 import { useRouter } from 'next/navigation';
 import useGetProfileByUserId from '../hooks/useGetProfileByUserId';
-import useCreateProfile from '../hooks/useCreateProfile';
 
 const UserContext = createContext<UserContextTypes | null>(null);
 
@@ -15,27 +14,51 @@ const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
 
   const checkUser = async () => {
     try {
-      const currentSession = await account.getSession("current");
-      if (!currentSession) return
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) {
+        setUser(null)
+        return
+      }
 
-      const promise = await account.get() as any
-      const profile = await useGetProfileByUserId(promise?.$id)
+      const profile = await useGetProfileByUserId(authUser.id)
 
-      setUser({ id: promise?.$id, name: promise?.name,  bio: profile?.bio, image: profile?.image });
+      setUser({
+        id: authUser.id,
+        name: profile?.name || authUser.user_metadata?.name,
+        bio: profile?.bio,
+        image: profile?.image,
+      });
     } catch (error) {
       setUser(null);
     }
   };
 
-  useEffect(() => { checkUser() }, []);
+  useEffect(() => {
+    checkUser()
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      checkUser()
+    })
+
+    return () => subscription.unsubscribe()
+  }, []);
 
   const register = async (name: string, email: string, password: string) => {
 
     try {
-      const promise = await account.create(ID.unique(), email, password, name)
-      await account.createEmailSession(email, password);
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { name } },
+      })
 
-      await useCreateProfile(promise?.$id, name, String(process.env.NEXT_PUBLIC_PLACEHOLDER_DEAFULT_IMAGE_ID), '')
+      if (error) throw error
+
+      // The profile row is created by the on_auth_user_created trigger.
+      if (!data.session) {
+        throw new Error('Please confirm your email address before logging in.')
+      }
+
       await checkUser()
 
     } catch (error) {
@@ -46,16 +69,23 @@ const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
 
   const login = async (email: string, password: string) => {
     try {
-      await account.createEmailSession(email, password);
-      checkUser();
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+
+      if (error) throw error
+
+      await checkUser();
     } catch (error) {
       console.error(error);
+      throw error;
     }
   };
 
   const logout = async () => {
     try {
-      await account.deleteSession('current');
+      const { error } = await supabase.auth.signOut()
+
+      if (error) throw error
+
       setUser(null);
       router.refresh()
     } catch (error) {

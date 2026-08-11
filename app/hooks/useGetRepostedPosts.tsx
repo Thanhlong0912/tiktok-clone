@@ -17,7 +17,7 @@ const useGetRepostedPosts = async (userId: string): Promise<PostWithProfile[]> =
         })
 
         const result = await Promise.all(objPromises)
-        return result.filter((post): post is PostWithProfile => post !== null).reverse()
+        return result.filter((post): post is PostWithProfile => post !== null)
     } catch (error) {
         console.error("useGetRepostedPosts error:", error)
         throw error

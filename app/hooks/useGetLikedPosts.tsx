@@ -1,24 +1,19 @@
-import { database, Query } from "@/libs/AppWriteClient";
+import { supabase } from "@/libs/supabase";
 import { PostWithProfile } from "../types";
 import useGetPostById from "./useGetPostById";
 
 const useGetLikedPosts = async (userId: string): Promise<PostWithProfile[]> => {
-    console.log("useGetLikedPosts called with userId:", userId)
     try {
-        const response = await database.listDocuments(
-            String(process.env.NEXT_PUBLIC_DATABASE_ID),
-            String(process.env.NEXT_PUBLIC_COLLECTION_ID_LIKE),
-            [
-                Query.equal('user_id', userId),
-                Query.orderDesc("$id")
-            ]
-        );
-        const documents = response.documents;
-        console.log("Found liked documents:", documents.length)
+        const { data, error } = await supabase
+            .from('likes')
+            .select('id, user_id, post_id')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
 
-        const objPromises = documents.map(async doc => {
+        if (error) throw error
+
+        const objPromises = (data ?? []).map(async doc => {
             try {
-                console.log("Fetching post details for post_id:", doc?.post_id)
                 let post = await useGetPostById(doc?.post_id)
                 return post as PostWithProfile
             } catch (error) {
@@ -28,9 +23,7 @@ const useGetLikedPosts = async (userId: string): Promise<PostWithProfile[]> => {
         })
 
         const result = await Promise.all(objPromises)
-        const filteredResult = result.filter((post): post is PostWithProfile => post !== null)
-        console.log("Retrieved liked posts count:", filteredResult.length)
-        return filteredResult
+        return result.filter((post): post is PostWithProfile => post !== null)
     } catch (error) {
         console.error("useGetLikedPosts error:", error)
         throw error

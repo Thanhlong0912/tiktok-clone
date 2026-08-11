@@ -9,8 +9,8 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
     "@types/debounce": "^1.2.2",
-    "appwrite": "^13.0.0",
     "debounce": "^1.2.1",
     "image-js": "^0.35.4",
     "lucide-react": "^0.292.0",

@@ -1,15 +1,9 @@
-import { database } from "@/libs/AppWriteClient"
+import { supabase } from "@/libs/supabase"
 
 const useDeleteComment = async (id: string) => {
-    try {
-        await database.deleteDocument(
-            String(process.env.NEXT_PUBLIC_DATABASE_ID),
-            String(process.env.NEXT_PUBLIC_COLLECTION_ID_COMMENT),
-            id
-        );
-    } catch (error) {
-        throw error
-    }
+    const { error } = await supabase.from('comments').delete().eq('id', id)
+
+    if (error) throw error
 }
 
 export default useDeleteComment

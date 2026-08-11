@@ -7,7 +7,7 @@ const inFlight = new Map<string, Promise<number>>()
 
 /**
  * Real like count for a post, cached for a minute so grids of thumbnails
- * don't re-query Appwrite on every render.
+ * don't re-query Supabase on every render.
  */
 export async function getPostLikeCount(postId: string): Promise<number> {
   const cached = likeCountCache.get(postId)

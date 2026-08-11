@@ -1,5 +1,14 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
+## Supabase setup
+
+This app uses Supabase for Postgres, Auth and Storage. Before running it:
+
+1. **Run the schema.** Paste `supabase/migrations/0001_init.sql` into the Supabase SQL editor and run it. It creates the `profiles`, `posts`, `comments`, `likes`, `follows`, `saves` and `reposts` tables with row level security, the `handle_new_user` trigger that creates a profile for every new account, and the public `media` storage bucket with its policies.
+2. **Upload the default avatar.** In Storage → `media`, upload an image named exactly `placeholder-avatar.png`. New profiles point at it until the user picks their own picture. The name must match `NEXT_PUBLIC_PLACEHOLDER_DEAFULT_IMAGE_ID` in `.env` and the default in `handle_new_user()` — extension included.
+3. **Disable email confirmation.** Auth → Providers → Email → turn off "Confirm email", so registering signs the user in straight away. If you leave it on, registration will ask the user to confirm their address first.
+4. **Fill in `.env`.** Copy `.env.example` to `.env` and set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from Project settings → API.
+
 ## Getting Started
 
 First, run the development server:

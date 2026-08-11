@@ -1,12 +1,11 @@
 export const createBucketUrl = (fileId: string) => {
 
-  const url = process.env.NEXT_PUBLIC_APPWRITE_URL
-  const id = process.env.NEXT_PUBLIC_BUCKET_ID
-  const endpoint = process.env.NEXT_PUBLIC_ENDPOINT
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const bucket = process.env.NEXT_PUBLIC_SUPABASE_BUCKET
 
-  if (!url || !id || !endpoint || !fileId) return ''
+  if (!url || !bucket || !fileId) return ''
 
-  return `${url}/storage/buckets/${id}/files/${fileId}/view?project=${endpoint}`
+  return `${url}/storage/v1/object/public/${bucket}/${fileId}`
 }
 
 const useCreateBucketUrl = createBucketUrl

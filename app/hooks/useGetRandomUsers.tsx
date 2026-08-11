@@ -1,26 +1,21 @@
-import { database, Query } from "@/libs/AppWriteClient"
+import { supabase } from "@/libs/supabase"
 
 const useGetRandomUsers = async () => {
     try {
-        const profileResult = await database.listDocuments(
-            String(process.env.NEXT_PUBLIC_DATABASE_ID),
-            String(process.env.NEXT_PUBLIC_COLLECTION_ID_PROFILE),
-            [
-                Query.limit(5)
-            ]
-        );
-        const documents = profileResult.documents
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('user_id, name, image')
+            .limit(5)
 
-       const objPromises = documents.map(profile => {
+        if (error) throw error
+
+        return (data ?? []).map(profile => {
             return {
                 id: profile?.user_id,
                 name: profile?.name,
                 image: profile?.image,
             }
         })
-
-        const result = await Promise.all(objPromises)
-        return result
     } catch (error) {
         console.log(error)
     }

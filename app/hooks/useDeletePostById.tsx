@@ -1,4 +1,5 @@
-import { database, Query, storage } from "@/libs/AppWriteClient"
+import { supabase } from "@/libs/supabase"
+import { deleteFiles } from "@/libs/uploadWithProgress";
 import useDeleteComment from "./useDeleteComment";
 import useDeleteLike from "./useDeleteLike";
 import useGetCommentsByPostId from "./useGetCommentsByPostId";
@@ -6,26 +7,17 @@ import useGetLikesByPostId from "./useGetLikesByPostId";
 import { getPostStorageFileIds } from "../utils/postMedia";
 
 const useDeletePostById = async (postId: string, currentMedia: string) => {
-    try {
-        const likes = await useGetLikesByPostId(postId)
-        likes.forEach(async like => { await useDeleteLike(like?.id) })
+    const likes = await useGetLikesByPostId(postId)
+    await Promise.allSettled(likes.map(like => useDeleteLike(like?.id)))
 
-        const comments = await useGetCommentsByPostId(postId)
-        comments.forEach(async comment => { await useDeleteComment(comment?.id) })
+    const comments = await useGetCommentsByPostId(postId)
+    await Promise.allSettled(comments.map(comment => useDeleteComment(comment?.id)))
 
-        await database.deleteDocument(
-            String(process.env.NEXT_PUBLIC_DATABASE_ID),
-            String(process.env.NEXT_PUBLIC_COLLECTION_ID_POST),
-            postId
-        );
-        await Promise.allSettled(
-            getPostStorageFileIds(currentMedia).map((fileId) => (
-                storage.deleteFile(String(process.env.NEXT_PUBLIC_BUCKET_ID), fileId)
-            ))
-        );
-    } catch (error) {
-        throw error
-    }
+    const { error } = await supabase.from('posts').delete().eq('id', postId)
+
+    if (error) throw error
+
+    await deleteFiles(getPostStorageFileIds(currentMedia)).catch(() => {})
 }
 
 export default useDeletePostById

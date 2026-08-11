@@ -1,27 +1,20 @@
-import { database, Query } from "@/libs/AppWriteClient"
+import { supabase } from "@/libs/supabase"
 
 const useGetLikesByPostId = async (postId: string) => {
-    try {
-        const response = await database.listDocuments(
-            String(process.env.NEXT_PUBLIC_DATABASE_ID),
-            String(process.env.NEXT_PUBLIC_COLLECTION_ID_LIKE),
-            [
-                Query.equal('post_id', postId)
-            ]
-        );
-        const documents = response.documents;
-        const result = documents.map(doc => {
-            return {
-                id: doc?.$id,
-                user_id: doc?.user_id,
-                post_id: doc?.post_id
-            }
-        })
+    const { data, error } = await supabase
+        .from('likes')
+        .select('id, user_id, post_id')
+        .eq('post_id', postId)
 
-        return result
-    } catch (error) {
-        throw error
-    }
+    if (error) throw error
+
+    return (data ?? []).map(doc => {
+        return {
+            id: doc?.id,
+            user_id: doc?.user_id,
+            post_id: doc?.post_id
+        }
+    })
 }
 
 export default useGetLikesByPostId

@@ -1,37 +1,34 @@
-import { database, Query } from "@/libs/AppWriteClient";
+import { supabase } from "@/libs/supabase";
 import useGetProfileByUserId from "./useGetProfileByUserId";
 
 const useGetAllPosts = async () => {
-    try {
-        const response = await database.listDocuments(
-            String(process.env.NEXT_PUBLIC_DATABASE_ID),
-            String(process.env.NEXT_PUBLIC_COLLECTION_ID_POST),
-            [ Query.orderDesc("$id"), Query.limit(100) ]
-        );
-        const documents = response.documents;
+    const { data, error } = await supabase
+        .from('posts')
+        .select('id, user_id, video_url, text, created_at')
+        .order('created_at', { ascending: false })
+        .limit(100)
 
-        const objPromises = documents.map(async doc => {
-            let profile = await useGetProfileByUserId(doc?.user_id)
+    if (error) throw error
 
-            return {
-                id: doc?.$id,
-                user_id: doc?.user_id,
-                video_url: doc?.video_url,
-                text: doc?.text,
-                created_at: doc?.created_at,
-                profile: {
-                    user_id: profile?.user_id,
-                    name: profile?.name,
-                    image: profile?.image,
-                }
+    const objPromises = (data ?? []).map(async doc => {
+        let profile = await useGetProfileByUserId(doc?.user_id)
+
+        return {
+            id: doc?.id,
+            user_id: doc?.user_id,
+            video_url: doc?.video_url,
+            text: doc?.text,
+            created_at: doc?.created_at,
+            profile: {
+                user_id: profile?.user_id,
+                name: profile?.name,
+                image: profile?.image,
             }
-        })
+        }
+    })
 
-        const result = await Promise.all(objPromises)
-        return result
-    } catch (error) {
-        throw error
-    }
+    const result = await Promise.all(objPromises)
+    return result
 }
 
 export default useGetAllPosts

@@ -1,4 +1,4 @@
-import { database, Query } from "@/libs/AppWriteClient"
+import { supabase } from "@/libs/supabase"
 import useGetPostsByUser from "./useGetPostsByUserId"
 import useGetProfileByUserId from "./useGetProfileByUserId"
 
@@ -21,59 +21,66 @@ export interface ActivityItem {
 const MAX_ITEMS = 50
 
 /**
- * Builds a notification feed for a user from the existing Like, Comment and
- * Follow collections: who liked/commented on their posts and who followed
- * them. Timestamps come from Appwrite's built-in $createdAt.
+ * Builds a notification feed for a user from the existing likes, comments and
+ * follows tables: who liked/commented on their posts and who followed them.
  */
 const useGetActivity = async (userId: string): Promise<ActivityItem[]> => {
-    const databaseId = String(process.env.NEXT_PUBLIC_DATABASE_ID)
     const myPosts = await useGetPostsByUser(userId)
     const postIds = myPosts.map((post) => post.id)
 
+    const emptyResult = { data: [] as any[], error: null }
+
     const likesPromise = postIds.length > 0
-        ? database.listDocuments(databaseId, String(process.env.NEXT_PUBLIC_COLLECTION_ID_LIKE), [
-            Query.equal('post_id', postIds),
-            Query.orderDesc('$createdAt'),
-            Query.limit(MAX_ITEMS),
-        ])
-        : Promise.resolve({ documents: [] as any[] })
+        ? supabase
+            .from('likes')
+            .select('id, user_id, post_id, created_at')
+            .in('post_id', postIds)
+            .order('created_at', { ascending: false })
+            .limit(MAX_ITEMS)
+        : Promise.resolve(emptyResult)
 
     const commentsPromise = postIds.length > 0
-        ? database.listDocuments(databaseId, String(process.env.NEXT_PUBLIC_COLLECTION_ID_COMMENT), [
-            Query.equal('post_id', postIds),
-            Query.orderDesc('$createdAt'),
-            Query.limit(MAX_ITEMS),
-        ])
-        : Promise.resolve({ documents: [] as any[] })
+        ? supabase
+            .from('comments')
+            .select('id, user_id, post_id, text, created_at')
+            .in('post_id', postIds)
+            .order('created_at', { ascending: false })
+            .limit(MAX_ITEMS)
+        : Promise.resolve(emptyResult)
 
-    const followsPromise = database.listDocuments(databaseId, String(process.env.NEXT_PUBLIC_COLLECTION_ID_FOLLOW), [
-        Query.equal('to_user_id', userId),
-        Query.orderDesc('$createdAt'),
-        Query.limit(MAX_ITEMS),
-    ])
+    const followsPromise = supabase
+        .from('follows')
+        .select('id, user_id, to_user_id, created_at')
+        .eq('to_user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(MAX_ITEMS)
 
     const [likes, comments, follows] = await Promise.all([likesPromise, commentsPromise, followsPromise])
 
+    if (likes.error) throw likes.error
+    if (comments.error) throw comments.error
+    if (follows.error) throw follows.error
+
     const rawItems: Array<Omit<ActivityItem, 'actor'> & { actorUserId: string }> = []
 
-    for (const doc of likes.documents) {
+    for (const doc of likes.data ?? []) {
         if (doc.user_id === userId) continue
         rawItems.push({
-            id: `like_${doc.$id}`,
+            id: `like_${doc.id}`,
             type: 'like',
-            createdAt: doc.$createdAt,
+            createdAt: doc.created_at,
             actorUserId: doc.user_id,
             postId: doc.post_id,
             postUserId: userId,
         })
     }
 
-    for (const doc of comments.documents) {
+    for (const doc of comments.data ?? []) {
         if (doc.user_id === userId) continue
         rawItems.push({
-            id: `comment_${doc.$id}`,
+            id: `comment_${doc.id}`,
             type: 'comment',
-            createdAt: doc.$createdAt,
+            createdAt: doc.created_at,
             actorUserId: doc.user_id,
             postId: doc.post_id,
             postUserId: userId,
@@ -81,12 +88,12 @@ const useGetActivity = async (userId: string): Promise<ActivityItem[]> => {
         })
     }
 
-    for (const doc of follows.documents) {
+    for (const doc of follows.data ?? []) {
         if (doc.user_id === userId) continue
         rawItems.push({
-            id: `follow_${doc.$id}`,
+            id: `follow_${doc.id}`,
             type: 'follow',
-            createdAt: doc.$createdAt,
+            createdAt: doc.created_at,
             actorUserId: doc.user_id,
         })
     }

@@ -1,15 +1,9 @@
-import { database } from "@/libs/AppWriteClient";
+import { supabase } from "@/libs/supabase";
 
 const useDeleteFollow = async (id: string) => {
-    try {
-        await database.deleteDocument(
-            String(process.env.NEXT_PUBLIC_DATABASE_ID),
-            String(process.env.NEXT_PUBLIC_COLLECTION_ID_FOLLOW),
-            id
-        );
-    } catch (error) {
-        throw error
-    }
+    const { error } = await supabase.from('follows').delete().eq('id', id)
+
+    if (error) throw error
 }
 
 export default useDeleteFollow

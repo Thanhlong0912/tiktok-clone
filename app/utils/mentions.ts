@@ -9,7 +9,7 @@ import { usePostStore } from '../stores/post'
  *  1. Local mention registry — recorded when a mention is picked in the
  *     upload composer, so self-created mentions always resolve.
  *  2. Profiles already present in the cached feed.
- *  3. Appwrite profile search (matches names without spaces; multi-word
+ *  3. Supabase profile search (matches names without spaces; multi-word
  *     names may not be findable this way since mentions strip spaces).
  */
 

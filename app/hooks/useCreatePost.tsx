@@ -1,4 +1,5 @@
-import { database, storage, ID } from "@/libs/AppWriteClient"
+import { supabase } from "@/libs/supabase"
+import { deleteFiles, uploadFileWithProgress } from "@/libs/uploadWithProgress"
 import { createImagePostValue, createStorageFileId, UploadPostMedia } from "../utils/postMedia"
 
 const useCreatePost = async (
@@ -8,7 +9,6 @@ const useCreatePost = async (
     onProgress?: (percent: number) => void
 ) => {
     const uploadedFileIds: string[] = []
-    const bucketId = String(process.env.NEXT_PUBLIC_BUCKET_ID)
 
     const totalFiles = media.type === 'video'
         ? 1
@@ -16,8 +16,8 @@ const useCreatePost = async (
     let completedFiles = 0
 
     const uploadFile = async (fileId: string, file: File) => {
-        await storage.createFile(bucketId, fileId, file, undefined, (progress) => {
-            onProgress?.(Math.round(((completedFiles + progress.progress / 100) / totalFiles) * 100))
+        await uploadFileWithProgress(fileId, file, (percent) => {
+            onProgress?.(Math.round(((completedFiles + percent / 100) / totalFiles) * 100))
         })
         completedFiles += 1
         onProgress?.(Math.round((completedFiles / totalFiles) * 100))
@@ -47,20 +47,15 @@ const useCreatePost = async (
             mediaValue = createImagePostValue(imageIds, audioId)
         }
 
-        await database.createDocument(
-            String(process.env.NEXT_PUBLIC_DATABASE_ID),
-            String(process.env.NEXT_PUBLIC_COLLECTION_ID_POST),
-            ID.unique(),
-        {
+        const { error } = await supabase.from('posts').insert({
             user_id: userId,
             text: caption,
             video_url: mediaValue,
-            created_at: new Date().toISOString(),
-        });
+        })
+
+        if (error) throw error
     } catch (error) {
-        await Promise.allSettled(
-            uploadedFileIds.map((fileId) => storage.deleteFile(String(process.env.NEXT_PUBLIC_BUCKET_ID), fileId))
-        )
+        await deleteFiles(uploadedFileIds).catch(() => {})
         throw error
     }
 }

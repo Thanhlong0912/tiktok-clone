@@ -1,19 +1,15 @@
-import { database, ID } from "@/libs/AppWriteClient";
+import { supabase } from "@/libs/supabase";
 
 const useCreateFollow = async (userId: string, toUserId: string) => {
-    try {
-        const response = await database.createDocument(
-            String(process.env.NEXT_PUBLIC_DATABASE_ID),
-            String(process.env.NEXT_PUBLIC_COLLECTION_ID_FOLLOW),
-            ID.unique(),
-        {
-            user_id: userId,
-            to_user_id: toUserId,
-        });
-        return response.$id as string;
-    } catch (error) {
-        throw error
-    }
+    const { data, error } = await supabase
+        .from('follows')
+        .insert({ user_id: userId, to_user_id: toUserId })
+        .select('id')
+        .single()
+
+    if (error) throw error
+
+    return data.id as string
 }
 
 export default useCreateFollow
