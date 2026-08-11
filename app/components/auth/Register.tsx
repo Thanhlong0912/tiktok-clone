@@ -69,7 +69,11 @@ const Register = () => {
     } catch (error) {
         console.log(error)
         setLoading(false)
-        alert(error)
+        const message = (error as { message?: string })?.message
+        setError({
+            type: 'form',
+            message: message || 'Something went wrong, please try again'
+        })
     }
   }
 
@@ -121,6 +125,12 @@ const Register = () => {
                   error={showError('confirmPassword')}
               />
           </div>
+
+          {showError('form') ? (
+              <div className="px-6 pt-2 text-[14px] font-semibold text-[#F02C56]">
+                  {showError('form')}
+              </div>
+          ) : null}
 
           <div className="px-6 pb-2 mt-6">
               <button

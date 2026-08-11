@@ -25,8 +25,13 @@ const Login = () => {
     setError(null)
     let isError = false
 
+    const reg = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/
+
     if (!email) {
         setError({ type: 'email', message: 'An Email is required'})
+        isError = true
+    } else if (!reg.test(email)) {
+        setError({ type: 'email', message: 'Log in with your email address, not your username'})
         isError = true
     } else if (!password) {
         setError({ type: 'password', message: 'A Password is required'})
@@ -48,7 +53,15 @@ const Login = () => {
     } catch (error) {
         console.log(error)
         setLoading(false)
-        alert(error)
+        // Supabase answers both an unknown email and a wrong password with the
+        // same generic message, so say that rather than leaking the raw error.
+        const message = (error as { message?: string })?.message
+        setError({
+            type: 'form',
+            message: message === 'Invalid login credentials'
+                ? 'Incorrect email or password'
+                : message || 'Something went wrong, please try again'
+        })
     }
   }
 
@@ -76,6 +89,12 @@ const Login = () => {
                 error={showError('password')}
             />
         </div>
+
+        {showError('form') ? (
+            <div className="px-6 pt-2 text-[14px] font-semibold text-[#F02C56]">
+                {showError('form')}
+            </div>
+        ) : null}
 
         <div className="px-6 pb-2 mt-6">
             <button
