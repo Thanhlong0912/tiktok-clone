@@ -39,6 +39,17 @@ describe('planOrphans', () => {
         expect(result.skipped).toEqual(['in-flight'])
     })
 
+    it('skips an object one millisecond younger than the threshold', () => {
+        const result = planOrphans(
+            [{ key: 'borderline', lastModified: ago(24 * HOUR - 1) }],
+            new Set(),
+            { minAgeMs: 24 * HOUR, now }
+        )
+
+        expect(result.orphans).toEqual([])
+        expect(result.skipped).toEqual(['borderline'])
+    })
+
     it('treats an object exactly at the minimum age as old enough', () => {
         const result = planOrphans(
             [{ key: 'borderline', lastModified: ago(24 * HOUR) }],
