@@ -3,19 +3,29 @@ import { createS3Adapter } from './s3Adapter'
 
 type ProgressEvent = { loaded?: number; total?: number }
 
+type DeleteError = { Key?: string; Code?: string; Message?: string }
+
 const makeAdapter = (overrides: {
     progressEvents?: ProgressEvent[]
     failWith?: Error
     abortFailsWith?: Error
+    deleteErrors?: DeleteError[]
 } = {}) => {
     const sent: any[] = []
     const uploads: any[] = []
+    const clients: any[] = []
+
+    class FakeXhrHttpHandler {
+        constructor(public config: any) {}
+    }
 
     class FakeS3Client {
-        constructor(public config: any) {}
+        constructor(public config: any) {
+            clients.push(this)
+        }
         async send(command: any) {
             sent.push(command)
-            return {}
+            return overrides.deleteErrors ? { Errors: overrides.deleteErrors } : {}
         }
     }
 
@@ -60,10 +70,11 @@ const makeAdapter = (overrides: {
             S3Client: FakeS3Client as any,
             DeleteObjectsCommand: FakeDeleteObjectsCommand as any,
             Upload: FakeUpload as any,
+            XhrHttpHandler: FakeXhrHttpHandler as any,
         }),
     })
 
-    return { adapter, sent, uploads }
+    return { adapter, sent, uploads, clients, FakeXhrHttpHandler }
 }
 
 const file = (name = 'clip.mp4', type = 'video/mp4') =>
@@ -143,6 +154,36 @@ describe('createS3Adapter.upload', () => {
 
         await expect(adapter.upload('abc123', file())).rejects.toThrow('network down')
     })
+
+    it('refuses to start when the signal is already aborted', async () => {
+        const { adapter, uploads } = makeAdapter()
+        const controller = new AbortController()
+        controller.abort()
+
+        await expect(
+            adapter.upload('abc123', file(), { signal: controller.signal })
+        ).rejects.toThrow('Upload aborted')
+        expect(uploads).toHaveLength(0)
+    })
+})
+
+describe('createS3Adapter client configuration', () => {
+    it('uses an xhr request handler so progress is reported byte by byte', async () => {
+        const { adapter, clients, FakeXhrHttpHandler } = makeAdapter()
+
+        await adapter.upload('abc123', file())
+
+        expect(clients[0].config.requestHandler).toBeInstanceOf(FakeXhrHttpHandler)
+    })
+
+    it('only sends checksums when the operation requires them', async () => {
+        const { adapter, clients } = makeAdapter()
+
+        await adapter.upload('abc123', file())
+
+        expect(clients[0].config.requestChecksumCalculation).toBe('WHEN_REQUIRED')
+        expect(clients[0].config.responseChecksumValidation).toBe('WHEN_REQUIRED')
+    })
 })
 
 describe('createS3Adapter.remove', () => {
@@ -174,6 +215,36 @@ describe('createS3Adapter.remove', () => {
         await adapter.remove([])
 
         expect(sent).toHaveLength(0)
+    })
+
+    it('resolves when the response carries no per-key errors', async () => {
+        const { adapter } = makeAdapter()
+
+        await expect(adapter.remove(['a', 'b'])).resolves.toBeUndefined()
+    })
+
+    it('throws when a 200 response carries per-key errors, naming keys and codes', async () => {
+        const { adapter } = makeAdapter({
+            deleteErrors: [
+                { Key: 'a', Code: 'AccessDenied', Message: 'denied' },
+                { Key: 'b', Code: 'InternalError', Message: 'boom' },
+            ],
+        })
+
+        await expect(adapter.remove(['a', 'b'])).rejects.toThrow(
+            'Failed to delete 2 of 2 object(s): a (AccessDenied), b (InternalError)'
+        )
+    })
+
+    it('aggregates per-key errors across chunked batches', async () => {
+        const { adapter } = makeAdapter({
+            deleteErrors: [{ Key: 'x', Code: 'AccessDenied' }],
+        })
+
+        // 1001 keys is two requests, each returning one error.
+        await expect(
+            adapter.remove(Array.from({ length: 1001 }, (_, i) => `k${i}`))
+        ).rejects.toThrow('Failed to delete 2 of 1001 object(s)')
     })
 })
 
