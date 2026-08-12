@@ -10,6 +10,16 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-11-s3-storage-design.md`
 
+> **This plan is historical. The shipped code has moved past it.**
+> Task-level code blocks below were amended three times during execution to
+> match defects found in review, but the final whole-branch review then drove
+> a fix wave that added modules this plan never describes — `fetchAllRows.ts`
+> (paged database reads), `args.ts` (extracted argument parsing), lazy adapter
+> construction in `index.ts`, and `@aws-sdk/xhr-http-handler` for byte-level
+> browser progress. Read the code, not this file, for current behaviour.
+> The full finding-by-finding history is in the SDD ledger at
+> `.superpowers/sdd/2026-08-11-s3-storage-layer/progress.md`.
+
 ## Global Constraints
 
 - **Prerequisite:** the "S3 connection" toggle must be enabled in the Supabase project's Storage settings. Nothing in this plan functions until it is on.
