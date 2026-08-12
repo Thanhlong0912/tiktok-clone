@@ -14,6 +14,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1107.0",
     "@aws-sdk/lib-storage": "^3.1107.0",
+    "@aws-sdk/xhr-http-handler": "^3.1108.0",
     "@supabase/supabase-js": "^2.112.3",
     "@types/debounce": "^1.2.2",
     "debounce": "^1.2.1",
