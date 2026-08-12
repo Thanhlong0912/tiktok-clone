@@ -1082,7 +1082,7 @@ describe('buildReferencedKeys', () => {
     it('collects bare video ids', () => {
         const referenced = buildReferencedKeys(
             [{ video_url: 'video1' }],
-            [],
+            [{ image: null }],
             'placeholder-avatar.png'
         )
 
@@ -1092,7 +1092,7 @@ describe('buildReferencedKeys', () => {
     it('expands encoded image posts into every constituent file', () => {
         const referenced = buildReferencedKeys(
             [{ video_url: 'images:img1,img2|audio:aud1' }],
-            [],
+            [{ image: null }],
             'placeholder-avatar.png'
         )
 
@@ -1105,7 +1105,7 @@ describe('buildReferencedKeys', () => {
     it('expands image posts that have no audio track', () => {
         const referenced = buildReferencedKeys(
             [{ video_url: 'images:img1,img2' }],
-            [],
+            [{ image: null }],
             'placeholder-avatar.png'
         )
 
@@ -1140,6 +1140,18 @@ describe('buildReferencedKeys', () => {
             /returned no rows/
         )
     })
+
+    it('refuses when only posts came back empty', () => {
+        expect(() =>
+            buildReferencedKeys([], [{ image: 'avatar1' }], 'placeholder-avatar.png')
+        ).toThrow(/returned no rows/)
+    })
+
+    it('refuses when only profiles came back empty', () => {
+        expect(() =>
+            buildReferencedKeys([{ video_url: 'video1' }], [], 'placeholder-avatar.png')
+        ).toThrow(/returned no rows/)
+    })
 })
 ```
 
@@ -1165,12 +1177,16 @@ export const buildReferencedKeys = (
     profiles: ProfileRow[],
     placeholderImageId: string
 ): Set<string> => {
-    if (posts.length === 0 && profiles.length === 0) {
+    // Fails closed per-table, not only when the whole database looks empty.
+    // A posts-only failure (RLS, wrong table) would otherwise leave a set of
+    // just profile images and mark every post's media as an orphan.
+    if (posts.length === 0 || profiles.length === 0) {
+        const empty = posts.length === 0 ? 'posts' : 'profiles'
         throw new Error(
-            'The database returned no rows for posts or profiles. Refusing to ' +
-            'continue, because an empty reference set would classify every ' +
-            'object in the bucket as an orphan. Check SUPABASE_SERVICE_ROLE_KEY ' +
-            'and the project url.'
+            `The database returned no rows for ${empty}. Refusing to continue, ` +
+            'because an incomplete reference set would classify live objects in ' +
+            'the bucket as orphans. Check SUPABASE_SERVICE_ROLE_KEY, the project ' +
+            'url, and that RLS is not filtering the query.'
         )
     }
 
