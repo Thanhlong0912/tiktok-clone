@@ -1,5 +1,5 @@
 import { supabase } from "@/libs/supabase"
-import { deleteFiles, uploadFileWithProgress } from "@/libs/uploadWithProgress"
+import { storage } from "@/libs/storage"
 import { createImagePostValue, createStorageFileId, UploadPostMedia } from "../utils/postMedia"
 
 const useCreatePost = async (
@@ -16,8 +16,10 @@ const useCreatePost = async (
     let completedFiles = 0
 
     const uploadFile = async (fileId: string, file: File) => {
-        await uploadFileWithProgress(fileId, file, (percent) => {
-            onProgress?.(Math.round(((completedFiles + percent / 100) / totalFiles) * 100))
+        await storage.upload(fileId, file, {
+            onProgress: (percent) => {
+                onProgress?.(Math.round(((completedFiles + percent / 100) / totalFiles) * 100))
+            },
         })
         completedFiles += 1
         onProgress?.(Math.round((completedFiles / totalFiles) * 100))
@@ -55,7 +57,7 @@ const useCreatePost = async (
 
         if (error) throw error
     } catch (error) {
-        await deleteFiles(uploadedFileIds).catch(() => {})
+        await storage.remove(uploadedFileIds).catch(() => {})
         throw error
     }
 }

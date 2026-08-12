@@ -1,4 +1,4 @@
-import { BUCKET, supabase } from "@/libs/supabase"
+import { storage } from "@/libs/storage"
 import { createStorageFileId } from "../utils/postMedia";
 import Image from "image-js";
 
@@ -20,15 +20,11 @@ const useChangeUserImage = async (file: File, cropper: any, currentImage: string
     const arrayBuffer = await blob.arrayBuffer();
     const finalFile = new File([arrayBuffer], file.name, { type: blob.type });
 
-    const { error } = await supabase.storage.from(BUCKET).upload(imageId, finalFile, {
-        contentType: finalFile.type,
-    })
-
-    if (error) throw error
+    await storage.upload(imageId, finalFile)
 
     // if current image is not default image delete
     if (currentImage != String(process.env.NEXT_PUBLIC_PLACEHOLDER_DEAFULT_IMAGE_ID)) {
-        await supabase.storage.from(BUCKET).remove([currentImage]);
+        await storage.remove([currentImage]);
     }
 
     return imageId

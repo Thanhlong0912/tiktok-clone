@@ -1,5 +1,5 @@
 import { supabase } from "@/libs/supabase"
-import { deleteFiles } from "@/libs/uploadWithProgress";
+import { storage } from "@/libs/storage";
 import useDeleteComment from "./useDeleteComment";
 import useDeleteLike from "./useDeleteLike";
 import useGetCommentsByPostId from "./useGetCommentsByPostId";
@@ -17,7 +17,7 @@ const useDeletePostById = async (postId: string, currentMedia: string) => {
 
     if (error) throw error
 
-    await deleteFiles(getPostStorageFileIds(currentMedia)).catch(() => {})
+    await storage.remove(getPostStorageFileIds(currentMedia)).catch(() => {})
 }
 
 export default useDeletePostById
