@@ -6,6 +6,7 @@ type ProgressEvent = { loaded?: number; total?: number }
 const makeAdapter = (overrides: {
     progressEvents?: ProgressEvent[]
     failWith?: Error
+    abortFailsWith?: Error
 } = {}) => {
     const sent: any[] = []
     const uploads: any[] = []
@@ -24,7 +25,11 @@ const makeAdapter = (overrides: {
 
     class FakeUpload {
         handlers: Record<string, (event: any) => void> = {}
-        abort = vi.fn().mockResolvedValue(undefined)
+        abort = vi.fn().mockImplementation(async () => {
+            if (overrides.abortFailsWith) {
+                throw overrides.abortFailsWith
+            }
+        })
 
         constructor(public params: any) {
             uploads.push(this)
@@ -128,6 +133,15 @@ describe('createS3Adapter.upload', () => {
 
         await expect(adapter.upload('abc123', file())).rejects.toThrow('network down')
         expect(uploads[0].abort).toHaveBeenCalled()
+    })
+
+    it('surfaces the original error when the cleanup abort also fails', async () => {
+        const { adapter } = makeAdapter({
+            failWith: new Error('network down'),
+            abortFailsWith: new Error('abort failed'),
+        })
+
+        await expect(adapter.upload('abc123', file())).rejects.toThrow('network down')
     })
 })
 

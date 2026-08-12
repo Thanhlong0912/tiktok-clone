@@ -84,11 +84,11 @@ export const createS3Adapter = (options: S3AdapterOptions): StorageAdapter => {
                 uploadOptions?.onProgress?.((progress.loaded ?? 0) / progress.total * 100)
             })
 
-            uploadOptions?.signal?.addEventListener(
-                'abort',
-                () => { void upload.abort() },
-                { once: true }
-            )
+            const handleAbortSignal = () => {
+                void upload.abort().catch(() => {})
+            }
+
+            uploadOptions?.signal?.addEventListener('abort', handleAbortSignal)
 
             try {
                 await upload.done()
@@ -98,6 +98,8 @@ export const createS3Adapter = (options: S3AdapterOptions): StorageAdapter => {
                 // in object listings, so clean up before surfacing the error.
                 await upload.abort().catch(() => {})
                 throw error
+            } finally {
+                uploadOptions?.signal?.removeEventListener('abort', handleAbortSignal)
             }
         },
 
