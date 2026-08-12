@@ -571,6 +571,7 @@ type ProgressEvent = { loaded?: number; total?: number }
 const makeAdapter = (overrides: {
     progressEvents?: ProgressEvent[]
     failWith?: Error
+    abortFailsWith?: Error
 } = {}) => {
     const sent: any[] = []
     const uploads: any[] = []
@@ -589,7 +590,11 @@ const makeAdapter = (overrides: {
 
     class FakeUpload {
         handlers: Record<string, (event: any) => void> = {}
-        abort = vi.fn().mockResolvedValue(undefined)
+        abort = vi.fn().mockImplementation(async () => {
+            if (overrides.abortFailsWith) {
+                throw overrides.abortFailsWith
+            }
+        })
 
         constructor(public params: any) {
             uploads.push(this)
@@ -693,6 +698,15 @@ describe('createS3Adapter.upload', () => {
 
         await expect(adapter.upload('abc123', file())).rejects.toThrow('network down')
         expect(uploads[0].abort).toHaveBeenCalled()
+    })
+
+    it('surfaces the original error even when the cleanup abort also fails', async () => {
+        const { adapter } = makeAdapter({
+            failWith: new Error('network down'),
+            abortFailsWith: new Error('abort failed'),
+        })
+
+        await expect(adapter.upload('abc123', file())).rejects.toThrow('network down')
     })
 })
 
@@ -835,11 +849,15 @@ export const createS3Adapter = (options: S3AdapterOptions): StorageAdapter => {
                 uploadOptions?.onProgress?.((progress.loaded ?? 0) / progress.total * 100)
             })
 
-            uploadOptions?.signal?.addEventListener(
-                'abort',
-                () => { void upload.abort() },
-                { once: true }
-            )
+            // Named so it can be detached in `finally`. `{ once: true }` alone
+            // would only detach if the abort actually fired, leaving a listener
+            // on a caller's long-lived signal that holds this finished Upload
+            // reachable — and could later abort an already-completed upload.
+            const handleAbortSignal = () => {
+                void upload.abort().catch(() => {})
+            }
+
+            uploadOptions?.signal?.addEventListener('abort', handleAbortSignal)
 
             try {
                 await upload.done()
@@ -847,8 +865,11 @@ export const createS3Adapter = (options: S3AdapterOptions): StorageAdapter => {
             } catch (error) {
                 // Incomplete multipart uploads stay billable and are invisible
                 // in object listings, so clean up before surfacing the error.
+                // The .catch keeps a failing abort from masking `error`.
                 await upload.abort().catch(() => {})
                 throw error
+            } finally {
+                uploadOptions?.signal?.removeEventListener('abort', handleAbortSignal)
             }
         },
 
