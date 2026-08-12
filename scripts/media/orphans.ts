@@ -18,8 +18,26 @@ const parseArgs = (argv: string[]) => {
 
     return {
         shouldDelete: argv.includes('--delete'),
-        minAgeHours: minAgeArg ? Number(minAgeArg.split('=')[1]) : 24,
+        minAgeRaw: minAgeArg ? minAgeArg.slice('--min-age='.length) : undefined,
     }
+}
+
+const parseMinAgeHours = (raw: string | undefined): number => {
+    if (raw === undefined) return 24
+
+    if (raw.trim() === '') {
+        throw new Error(
+            '--min-age was given no value. Pass a non-negative number of hours, e.g. --min-age=48.'
+        )
+    }
+
+    const hours = Number(raw)
+
+    if (!Number.isFinite(hours) || hours < 0) {
+        throw new Error(`--min-age must be a non-negative number of hours, got "${raw}".`)
+    }
+
+    return hours
 }
 
 const listAllObjects = async (client: S3Client, bucket: string): Promise<BucketObject[]> => {
@@ -47,11 +65,8 @@ const listAllObjects = async (client: S3Client, bucket: string): Promise<BucketO
 }
 
 const main = async () => {
-    const { shouldDelete, minAgeHours } = parseArgs(process.argv.slice(2))
-
-    if (!Number.isFinite(minAgeHours) || minAgeHours < 0) {
-        throw new Error('--min-age must be a non-negative number of hours')
-    }
+    const { shouldDelete, minAgeRaw } = parseArgs(process.argv.slice(2))
+    const minAgeHours = parseMinAgeHours(minAgeRaw)
 
     const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL')
     const bucket = process.env.NEXT_PUBLIC_SUPABASE_BUCKET || 'media'
@@ -103,17 +118,32 @@ const main = async () => {
 
     if (orphans.length === 0) return
 
+    const deleteErrors: { Key?: string; Code?: string; Message?: string }[] = []
+
     for (let index = 0; index < orphans.length; index += DELETE_BATCH_LIMIT) {
         const batch = orphans.slice(index, index + DELETE_BATCH_LIMIT)
-        await s3.send(
+        const response = await s3.send(
             new DeleteObjectsCommand({
                 Bucket: bucket,
                 Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true },
             })
         )
+
+        for (const error of response.Errors ?? []) {
+            deleteErrors.push(error)
+        }
     }
 
-    console.log(`\nDeleted ${orphans.length} objects.`)
+    const deletedCount = orphans.length - deleteErrors.length
+    console.log(`\nDeleted ${deletedCount} of ${orphans.length} objects.`)
+
+    if (deleteErrors.length > 0) {
+        console.error(`${deleteErrors.length} object(s) failed to delete:`)
+        for (const error of deleteErrors) {
+            console.error(`  ${error.Key}: ${error.Code} ${error.Message}`)
+        }
+        process.exit(1)
+    }
 }
 
 main().catch((error) => {
