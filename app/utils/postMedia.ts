@@ -9,6 +9,21 @@ export type UploadPostMedia =
 
 export const createStorageFileId = () => Math.random().toString(36).slice(2, 22)
 
+// One bucket folder per media kind. Keys are stored verbatim in
+// posts.video_url / profiles.image, so existing unprefixed keys keep
+// resolving untouched -- only new uploads are foldered.
+export const MEDIA_PREFIXES = {
+  video: 'video',
+  image: 'image',
+  music: 'music',
+  avatar: 'avatar',
+} as const
+
+export type MediaKind = keyof typeof MEDIA_PREFIXES
+
+export const createStorageKey = (kind: MediaKind) =>
+  `${MEDIA_PREFIXES[kind]}/${createStorageFileId()}`
+
 export const isImagePost = (mediaValue?: string | null) => {
   return Boolean(mediaValue?.startsWith(IMAGE_POST_PREFIX))
 }

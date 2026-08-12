@@ -1,6 +1,6 @@
 import { supabase } from "@/libs/supabase"
 import { storage } from "@/libs/storage"
-import { createImagePostValue, createStorageFileId, UploadPostMedia } from "../utils/postMedia"
+import { createImagePostValue, createStorageKey, UploadPostMedia } from "../utils/postMedia"
 
 const useCreatePost = async (
     media: UploadPostMedia,
@@ -30,11 +30,11 @@ const useCreatePost = async (
         let mediaValue = ''
 
         if (media.type === 'video') {
-            const videoId = createStorageFileId()
+            const videoId = createStorageKey('video')
             await uploadFile(videoId, media.file)
             mediaValue = videoId
         } else {
-            const imageIds = media.files.map(() => createStorageFileId())
+            const imageIds = media.files.map(() => createStorageKey('image'))
 
             for (let index = 0; index < media.files.length; index += 1) {
                 await uploadFile(imageIds[index], media.files[index])
@@ -42,7 +42,7 @@ const useCreatePost = async (
 
             let audioId = ''
             if (media.audioFile) {
-                audioId = createStorageFileId()
+                audioId = createStorageKey('music')
                 await uploadFile(audioId, media.audioFile)
             }
 

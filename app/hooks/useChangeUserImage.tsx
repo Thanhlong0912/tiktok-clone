@@ -1,9 +1,9 @@
 import { storage } from "@/libs/storage"
-import { createStorageFileId } from "../utils/postMedia";
+import { createStorageKey } from "../utils/postMedia";
 import Image from "image-js";
 
 const useChangeUserImage = async (file: File, cropper: any, currentImage: string) => {
-    let imageId = createStorageFileId()
+    let imageId = createStorageKey('avatar')
 
     const x = cropper.left;
     const y = cropper.top;
