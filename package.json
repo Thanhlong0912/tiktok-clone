@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test": "VITE_CONFIG_NATIVE_IGNORE_WARNING=true vitest run",
-    "test:watch": "VITE_CONFIG_NATIVE_IGNORE_WARNING=true vitest"
+    "test:watch": "VITE_CONFIG_NATIVE_IGNORE_WARNING=true vitest",
+    "media:orphans": "tsx --env-file=.env scripts/media/orphans.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1107.0",
