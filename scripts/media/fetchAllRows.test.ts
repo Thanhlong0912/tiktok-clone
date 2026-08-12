@@ -20,12 +20,27 @@ const fakeTable = (total: number, pageSize: number) => {
     return { fetchPage, ranges }
 }
 
+// Serves `total` rows but never returns more than `cap` per request, however
+// wide the requested range -- what PostgREST does when the project's max_rows
+// is set below our page size.
+const cappedTable = (total: number, cap: number) => {
+    const ranges: [number, number][] = []
+    const all = rows(total)
+
+    const fetchPage = async (from: number, to: number) => {
+        ranges.push([from, to])
+        return { data: all.slice(from, to + 1).slice(0, cap), error: null }
+    }
+
+    return { fetchPage, ranges }
+}
+
 describe('fetchAllRows', () => {
-    it('returns a single short page without asking for another', async () => {
+    it('asks again after a short page, since short can mean a max_rows cap', async () => {
         const { fetchPage, ranges } = fakeTable(3, 10)
 
         expect(await fetchAllRows(fetchPage, 10)).toEqual(rows(3))
-        expect(ranges).toEqual([[0, 9]])
+        expect(ranges).toEqual([[0, 9], [3, 12]])
     })
 
     it('asks again after exactly one full page and stops on the empty one', async () => {
@@ -39,7 +54,18 @@ describe('fetchAllRows', () => {
         const { fetchPage, ranges } = fakeTable(25, 10)
 
         expect(await fetchAllRows(fetchPage, 10)).toEqual(rows(25))
-        expect(ranges).toEqual([[0, 9], [10, 19], [20, 29]])
+        expect(ranges).toEqual([[0, 9], [10, 19], [20, 29], [25, 34]])
+    })
+
+    it('collects every row when max_rows is capped below the page size', async () => {
+        const { fetchPage, ranges } = cappedTable(25, 9)
+
+        const result = await fetchAllRows(fetchPage, 10)
+
+        expect(result).toHaveLength(25)
+        expect(result).toEqual(rows(25))
+        // Advancing by rows actually returned, not by the requested page size.
+        expect(ranges).toEqual([[0, 9], [9, 18], [18, 27], [25, 34]])
     })
 
     it('does not truncate at the postgrest default max_rows', async () => {

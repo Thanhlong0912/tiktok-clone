@@ -32,9 +32,13 @@ export const fetchAllRows = async <T,>(
         const page = data ?? []
         rows.push.apply(rows, page)
 
-        // A page shorter than the requested range is the last one. A full page
-        // may still be the last one, so it costs one extra empty request.
-        if (page.length < pageSize) {
+        // Only an *empty* page ends the walk. A short page cannot be trusted to
+        // mean "last page": PostgREST also caps `limit` at the project's
+        // `max_rows`, so if that is set below pageSize every page comes back
+        // short and stopping here would silently drop the rest of the table.
+        // Advancing by rows actually returned keeps this correct for any
+        // max_rows, at the cost of one extra request at the end.
+        if (page.length === 0) {
             return rows
         }
 

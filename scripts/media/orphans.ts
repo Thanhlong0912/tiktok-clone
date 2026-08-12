@@ -82,12 +82,22 @@ const main = async () => {
     console.log(`Bucket "${bucket}": ${objects.length} objects.`)
 
     // Paged: an unpaged select is capped at max_rows and truncated silently.
+    // Ordered by primary key because Postgres gives no stable row order across
+    // separate LIMIT/OFFSET queries -- without it a row written between two
+    // page reads can shift past a window already read and never be returned,
+    // leaving its media unreferenced and, once past --min-age, deletable.
     const [posts, profiles] = await Promise.all([
         fetchAllRows<PostRow>((from, to) =>
-            db.from('posts').select('video_url').range(from, to)
+            db.from('posts')
+                .select('video_url')
+                .order('id', { ascending: true })
+                .range(from, to)
         ),
         fetchAllRows<ProfileRow>((from, to) =>
-            db.from('profiles').select('image').range(from, to)
+            db.from('profiles')
+                .select('image')
+                .order('id', { ascending: true })
+                .range(from, to)
         ),
     ])
 
