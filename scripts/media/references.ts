@@ -8,12 +8,13 @@ export const buildReferencedKeys = (
     profiles: ProfileRow[],
     placeholderImageId: string
 ): Set<string> => {
-    if (posts.length === 0 && profiles.length === 0) {
+    if (posts.length === 0 || profiles.length === 0) {
+        const empty = posts.length === 0 ? 'posts' : 'profiles'
         throw new Error(
-            'The database returned no rows for posts or profiles. Refusing to ' +
-            'continue, because an empty reference set would classify every ' +
-            'object in the bucket as an orphan. Check SUPABASE_SERVICE_ROLE_KEY ' +
-            'and the project url.'
+            `The database returned no rows for ${empty}. Refusing to continue, ` +
+            'because an incomplete reference set would classify live objects in ' +
+            'the bucket as orphans. Check SUPABASE_SERVICE_ROLE_KEY, the project ' +
+            'url, and that RLS is not filtering the query.'
         )
     }
 

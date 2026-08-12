@@ -5,7 +5,7 @@ describe('buildReferencedKeys', () => {
     it('collects bare video ids', () => {
         const referenced = buildReferencedKeys(
             [{ video_url: 'video1' }],
-            [],
+            [{ image: null }],
             'placeholder-avatar.png'
         )
 
@@ -15,7 +15,7 @@ describe('buildReferencedKeys', () => {
     it('expands encoded image posts into every constituent file', () => {
         const referenced = buildReferencedKeys(
             [{ video_url: 'images:img1,img2|audio:aud1' }],
-            [],
+            [{ image: null }],
             'placeholder-avatar.png'
         )
 
@@ -28,7 +28,7 @@ describe('buildReferencedKeys', () => {
     it('expands image posts that have no audio track', () => {
         const referenced = buildReferencedKeys(
             [{ video_url: 'images:img1,img2' }],
-            [],
+            [{ image: null }],
             'placeholder-avatar.png'
         )
 
@@ -56,6 +56,18 @@ describe('buildReferencedKeys', () => {
 
         expect(referenced.has('placeholder-avatar.png')).toBe(true)
         expect(referenced.size).toBe(1)
+    })
+
+    it('refuses to build a set when posts are empty', () => {
+        expect(() => buildReferencedKeys([], [{ image: 'avatar1' }], 'placeholder-avatar.png')).toThrow(
+            /returned no rows/
+        )
+    })
+
+    it('refuses to build a set when profiles are empty', () => {
+        expect(() => buildReferencedKeys([{ video_url: 'video1' }], [], 'placeholder-avatar.png')).toThrow(
+            /returned no rows/
+        )
     })
 
     it('refuses to build a set from zero rows', () => {
