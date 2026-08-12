@@ -1,12 +1,23 @@
+const projectRefError = (supabaseUrl: string): Error =>
+    new Error(
+        `Cannot derive a project ref from "${supabaseUrl}". ` +
+        'The S3 storage layer requires a hosted Supabase project url of the ' +
+        'form https://<project-ref>.supabase.co'
+    )
+
 export const getProjectRef = (supabaseUrl: string): string => {
-    const { hostname } = new URL(supabaseUrl)
+    let hostname: string
+
+    try {
+        // A value that is not a url at all would otherwise surface as a bare
+        // TypeError with no hint about which setting is wrong.
+        hostname = new URL(supabaseUrl).hostname
+    } catch {
+        throw projectRefError(supabaseUrl)
+    }
 
     if (!hostname.endsWith('.supabase.co')) {
-        throw new Error(
-            `Cannot derive a project ref from "${supabaseUrl}". ` +
-            'The S3 storage layer requires a hosted Supabase project url of the ' +
-            'form https://<project-ref>.supabase.co'
-        )
+        throw projectRefError(supabaseUrl)
     }
 
     return hostname.split('.')[0]
