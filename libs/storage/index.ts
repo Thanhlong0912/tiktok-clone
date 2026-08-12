@@ -1,5 +1,11 @@
-import { BUCKET, SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from '@/libs/supabase'
-import { getProjectRef, getPublicBaseUrl, getRegion, getS3Endpoint } from './config'
+import { BUCKET, SUPABASE_URL, supabase } from '@/libs/supabase'
+import {
+    getProjectRef,
+    getPublicBaseUrl,
+    getRegion,
+    getS3Endpoint,
+    getS3SecretAccessKey,
+} from './config'
 import { createSessionCredentialProvider } from './credentials'
 import { createS3Adapter } from './s3Adapter'
 import type { StorageAdapter, UploadOptions } from './types'
@@ -26,7 +32,10 @@ const getAdapter = (): StorageAdapter => {
             ),
             credentials: createSessionCredentialProvider({
                 projectRef: getProjectRef(SUPABASE_URL),
-                anonKey: SUPABASE_ANON_KEY,
+                // Deliberately NOT SUPABASE_ANON_KEY: the app client can use a
+                // modern publishable key, but S3 SigV4 signing still needs the
+                // legacy anon JWT. See getS3SecretAccessKey.
+                anonKey: getS3SecretAccessKey(),
                 getSession: () => supabase.auth.getSession(),
             }),
         })

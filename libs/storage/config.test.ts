@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { getProjectRef, getRegion, getS3Endpoint, getPublicBaseUrl } from './config'
+import {
+    getProjectRef,
+    getRegion,
+    getS3Endpoint,
+    getPublicBaseUrl,
+    getS3SecretAccessKey,
+} from './config'
 
 describe('getProjectRef', () => {
     it('takes the first host label of a hosted project url', () => {
@@ -77,5 +83,57 @@ describe('getRegion', () => {
         process.env.NEXT_PUBLIC_SUPABASE_REGION = ''
 
         expect(() => getRegion()).toThrow(/Missing NEXT_PUBLIC_SUPABASE_REGION/)
+    })
+})
+
+describe('getS3SecretAccessKey', () => {
+    const original = process.env.NEXT_PUBLIC_SUPABASE_LEGACY_ANON_KEY
+
+    afterEach(() => {
+        if (original === undefined) {
+            delete process.env.NEXT_PUBLIC_SUPABASE_LEGACY_ANON_KEY
+        } else {
+            process.env.NEXT_PUBLIC_SUPABASE_LEGACY_ANON_KEY = original
+        }
+    })
+
+    it('returns a legacy anon jwt', () => {
+        process.env.NEXT_PUBLIC_SUPABASE_LEGACY_ANON_KEY = 'eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiJ9.sig'
+
+        expect(getS3SecretAccessKey()).toBe('eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiJ9.sig')
+    })
+
+    it('throws a setup hint when unset', () => {
+        delete process.env.NEXT_PUBLIC_SUPABASE_LEGACY_ANON_KEY
+
+        expect(getS3SecretAccessKey).toThrow(/Missing NEXT_PUBLIC_SUPABASE_LEGACY_ANON_KEY/)
+    })
+
+    it('treats an explicitly empty value as unset', () => {
+        process.env.NEXT_PUBLIC_SUPABASE_LEGACY_ANON_KEY = ''
+
+        expect(getS3SecretAccessKey).toThrow(/Missing NEXT_PUBLIC_SUPABASE_LEGACY_ANON_KEY/)
+    })
+
+    // The whole reason this setting exists. Signing with a publishable key
+    // fails inside the AWS SDK as an opaque signature mismatch, on every
+    // request regardless of file size, with nothing pointing at the key.
+    it('rejects a publishable key by name', () => {
+        process.env.NEXT_PUBLIC_SUPABASE_LEGACY_ANON_KEY = 'sb_publishable_abc123'
+
+        expect(getS3SecretAccessKey).toThrow(/publishable key/)
+        expect(getS3SecretAccessKey).toThrow(/legacy/)
+    })
+
+    it('refuses a secret key outright', () => {
+        process.env.NEXT_PUBLIC_SUPABASE_LEGACY_ANON_KEY = 'sb_secret_abc123'
+
+        expect(getS3SecretAccessKey).toThrow(/secret key/)
+    })
+
+    it('rejects anything that is not a jwt', () => {
+        process.env.NEXT_PUBLIC_SUPABASE_LEGACY_ANON_KEY = 'not-a-key'
+
+        expect(getS3SecretAccessKey).toThrow(/legacy anon key/)
     })
 })
