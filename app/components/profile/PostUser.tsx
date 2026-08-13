@@ -8,26 +8,15 @@ import { AiFillHeart, AiOutlineLoading3Quarters } from "react-icons/ai"
 import CaptionText from '../CaptionText'
 import ImageSlideshow from '../ImageSlideshow'
 import { formatCount } from '@/app/utils/formatNumber'
-import { getPostLikeCount } from '@/app/utils/postLikeCounts'
 
 const PostUser = ({ post }: PostUserCompTypes) => {
   const videoRef = useRef<HTMLVideoElement | null>(null)
-  const [likeCount, setLikeCount] = useState<number | null>(null)
   const [isHovering, setIsHovering] = useState<boolean>(false)
 
-  useEffect(() => {
-    let cancelled = false
-
-    getPostLikeCount(post.id)
-      .then((count) => {
-        if (!cancelled) setLikeCount(count)
-      })
-      .catch(() => null)
-
-    return () => {
-      cancelled = true
-    }
-  }, [post.id])
+  // Comes with the row from get_user_posts. Every tile used to issue its own
+  // query for this, which is what the 60s TTL cache in postLikeCounts.ts was
+  // working around.
+  const likeCount = post.like_count
 
   useEffect(() => {
     return () => {
@@ -124,7 +113,7 @@ const PostUser = ({ post }: PostUserCompTypes) => {
               <p className="text-ink text-[15px] pt-1 break-words">
                   <CaptionText text={post.text} />
               </p>
-              {likeCount !== null ? (
+              {likeCount > 0 ? (
                   <div className="flex items-center gap-1 text-ink-soft font-semibold text-xs">
                       <AiFillHeart size="14"/>
                       {formatCount(likeCount)}

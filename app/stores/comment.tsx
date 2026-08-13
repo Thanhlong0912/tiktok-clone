@@ -20,7 +20,7 @@ export const useCommentStore = create<CommentStore>()(
                 },
             }),
             {
-                name: 'store',
+                name: 'tt-comment',
                 storage: createJSONStorage(() => localStorage)
             }
         )

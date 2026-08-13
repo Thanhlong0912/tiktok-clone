@@ -14,10 +14,17 @@ import UploadLayout from '../layouts/UploadLayout'
 import { UploadError } from '../types'
 import { MAX_IMAGE_UPLOAD_COUNT, UploadPostMedia } from '../utils/postMedia'
 import { showToast } from '../utils/toast'
+import { captureVideoFrame, readVideoMetadata, type VideoMetadata } from '../utils/posterFrame'
 
 type UploadMode = 'video' | 'images'
 
-const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
+const MAX_VIDEO_SIZE_BYTES = 200 * 1024 * 1024
+const MAX_VIDEO_SIZE_LABEL = '200 MB'
+const MAX_VIDEO_DURATION_MS = 10 * 60 * 1000
+const MAX_VIDEO_DURATION_LABEL = '10 minutes'
+
+// Frames offered as cover options, as a fraction of the clip.
+const COVER_FRACTIONS = [0.05, 0.25, 0.5, 0.75, 0.95]
 
 const Upload = () => {
     const contextUser = useUser()
@@ -35,6 +42,10 @@ const Upload = () => {
     let [isUploading, setIsUploading] = useState<boolean>(false);
     let [uploadProgress, setUploadProgress] = useState<number>(0);
     let [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
+    const [videoMeta, setVideoMeta] = useState<VideoMetadata | null>(null);
+    const [coverOptions, setCoverOptions] = useState<Array<{ file: File; url: string }>>([]);
+    const [coverIndex, setCoverIndex] = useState<number>(0);
+    const [isPreparingCover, setIsPreparingCover] = useState<boolean>(false);
 
     useEffect(() => {
         if (!contextUser?.user) router.push('/')
@@ -62,20 +73,66 @@ const Upload = () => {
         }
     }, [audioDisplay])
 
-    const applyVideoFile = (file: File) => {
+    const applyVideoFile = async (file: File) => {
         if (!file.type.startsWith('video/')) {
             setError({ type: 'File', message: 'Only video files are supported' })
             return
         }
 
+        // The limit and the message used to disagree: this rejected anything
+        // over 50 MB while telling the user the cap was 2 GB.
         if (file.size > MAX_VIDEO_SIZE_BYTES) {
-            setError({ type: 'File', message: 'Videos must be smaller than 2 GB' })
+            setError({ type: 'File', message: `Videos must be smaller than ${MAX_VIDEO_SIZE_LABEL}` })
             return
         }
 
         setVideoDisplay(URL.createObjectURL(file))
         setVideoFile(file)
         setError(null)
+
+        // Duration was never checked, despite the drop zone promising a limit.
+        const meta = await readVideoMetadata(file)
+        if (meta && meta.durationMs > MAX_VIDEO_DURATION_MS) {
+            setError({ type: 'File', message: `Videos must be shorter than ${MAX_VIDEO_DURATION_LABEL}` })
+            return
+        }
+        setVideoMeta(meta)
+
+        await buildCoverOptions(file, meta)
+    }
+
+    /**
+     * Pre-renders a few candidate cover frames so the creator can pick one.
+     * Without a cover, every grid tile has to download video bytes to paint
+     * its first frame.
+     */
+    const buildCoverOptions = async (file: File, meta: VideoMetadata | null) => {
+        setIsPreparingCover(true)
+        coverOptions.forEach((option) => URL.revokeObjectURL(option.url))
+        setCoverOptions([])
+        setCoverIndex(0)
+
+        try {
+            const durationSeconds = (meta?.durationMs ?? 0) / 1000
+            const times = durationSeconds > 0
+                ? COVER_FRACTIONS.map((fraction) => durationSeconds * fraction)
+                : [0]
+
+            const frames: Array<{ file: File; url: string }> = []
+            for (const time of times) {
+                const capture = await captureVideoFrame(file, time)
+                if (capture) {
+                    frames.push({ file: capture.file, url: URL.createObjectURL(capture.file) })
+                }
+            }
+
+            setCoverOptions(frames)
+        } catch (error) {
+            // A missing cover degrades the thumbnail; it must not block posting.
+            console.error(error)
+        } finally {
+            setIsPreparingCover(false)
+        }
     }
 
     const applyImageFiles = (selectedFiles: File[]) => {
@@ -178,6 +235,11 @@ const Upload = () => {
     const clearVideo = () => {
         setVideoDisplay('')
         setVideoFile(null)
+        setVideoMeta(null)
+        // Object URLs for the cover thumbnails leak until revoked.
+        coverOptions.forEach((option) => URL.revokeObjectURL(option.url))
+        setCoverOptions([])
+        setCoverIndex(0)
     }
 
     const clearImages = () => {
@@ -224,14 +286,19 @@ const Upload = () => {
         setUploadProgress(0)
 
         try {
-            await useCreatePost(media, contextUser?.user?.id, caption.trim(), setUploadProgress)
+            await useCreatePost(media, contextUser?.user?.id, caption.trim(), setUploadProgress, {
+                poster: uploadMode === 'video' ? coverOptions[coverIndex]?.file ?? null : null,
+                metadata: uploadMode === 'video' ? videoMeta : null,
+            })
             showToast('Your post is live!')
             router.push(`/profile/${contextUser?.user?.id}`)
-            setIsUploading(false)
         } catch (error) {
-            console.log(error)
-            setIsUploading(false)
+            console.error(error)
             showToast('Upload failed. Please try again.', 'error')
+        } finally {
+            // Was set false only on the happy path AFTER router.push, so a
+            // throw from the navigation left the button spinning forever.
+            setIsUploading(false)
         }
     }
 
@@ -317,8 +384,8 @@ const Upload = () => {
                                 <p className="mt-4 text-[17px] text-ink-soft">Select video to upload</p>
                                 <p className="mt-1.5 text-ink-soft text-[13px]">Or drag and drop a file</p>
                                 <p className="mt-12 text-ink-soft text-sm">MP4</p>
-                                <p className="mt-2 text-ink-soft text-[13px]">Up to 30 minutes</p>
-                                <p className="mt-2 text-ink-soft text-[13px]">Less than 2 GB</p>
+                                <p className="mt-2 text-ink-soft text-[13px]">Up to 10 minutes</p>
+                                <p className="mt-2 text-ink-soft text-[13px]">Less than 200 MB</p>
                                 <label
                                     htmlFor="videoInput"
                                     className="px-2 py-1.5 mt-8 text-white text-[15px] w-[80%] bg-[#F02C56] rounded-sm cursor-pointer"
@@ -389,6 +456,39 @@ const Upload = () => {
                                     <button onClick={() => clearVideo()} className="text-[11px] ml-2 font-semibold text-ink">
                                         Change
                                     </button>
+                                </div>
+
+                                {/* Cover picker. The captured frame is stored as
+                                    posts.poster_key so grids and the feed paint
+                                    without downloading video bytes. */}
+                                <div className="absolute -bottom-[132px] left-0 w-full">
+                                    <p className="text-[13px] font-semibold text-ink">Cover</p>
+                                    {isPreparingCover ? (
+                                        <div className="mt-2 flex items-center gap-2 text-[12px] text-ink-soft">
+                                            <BiLoaderCircle className="animate-spin" size={14} />
+                                            Generating covers...
+                                        </div>
+                                    ) : coverOptions.length > 0 ? (
+                                        <div className="no-scrollbar mt-2 flex gap-2 overflow-x-auto pb-1">
+                                            {coverOptions.map((option, index) => (
+                                                <button
+                                                    key={option.url}
+                                                    onClick={() => setCoverIndex(index)}
+                                                    aria-label={`Use cover ${index + 1}`}
+                                                    aria-pressed={coverIndex === index}
+                                                    className={`h-16 w-11 shrink-0 overflow-hidden rounded border-2 transition-colors ${
+                                                        coverIndex === index ? 'border-tiktok' : 'border-transparent'
+                                                    }`}
+                                                >
+                                                    <img src={option.url} alt="" className="h-full w-full object-cover" />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="mt-2 text-[12px] text-ink-soft">
+                                            Couldn&apos;t generate a cover for this file. Your post will still upload.
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                     ) : (

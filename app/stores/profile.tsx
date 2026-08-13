@@ -20,7 +20,7 @@ export const useProfileStore = create<ProfileStore>()(
                 },
             }),
             {
-                name: 'store',
+                name: 'tt-profile',
                 storage: createJSONStorage(() => localStorage)
             }
         )

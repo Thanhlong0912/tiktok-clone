@@ -4,6 +4,7 @@ import TextInput from '../TextInput';
 import { BiLoaderCircle } from 'react-icons/bi';
 import { useUser } from '@/app/context/user';
 import { useGeneralStore } from '@/app/stores/general';
+import { isValidEmail } from '@/app/utils/email'
 
 const Login = () => {
     let { setIsLoginOpen } = useGeneralStore();
@@ -25,12 +26,10 @@ const Login = () => {
     setError(null)
     let isError = false
 
-    const reg = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/
-
     if (!email) {
         setError({ type: 'email', message: 'An Email is required'})
         isError = true
-    } else if (!reg.test(email)) {
+    } else if (!isValidEmail(email)) {
         setError({ type: 'email', message: 'Log in with your email address, not your username'})
         isError = true
     } else if (!password) {

@@ -12,7 +12,8 @@ import { RandomUsers } from '@/app/types';
 import { debounce } from 'debounce';
 import useSearchProfilesByName from '@/app/hooks/useSearchProfilesByName';
 import useCreateBucketUrl from '@/app/hooks/useCreateBucketUrl';
-import { searchTags } from '@/app/utils/postTags';
+import { fetchTrendingHashtags } from '@/app/utils/feed';
+import { supabase } from '@/libs/supabase';
 import ThemeToggle from './ThemeToggle';
 
 const TopNav = () => {
@@ -23,14 +24,34 @@ const TopNav = () => {
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [showMenu, setShowMenu] = useState<boolean>(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
-  let { setIsLoginOpen, setIsEditProfileOpen } = useGeneralStore()
-  const { allPosts } = usePostStore()
+  const { setIsLoginOpen, setIsEditProfileOpen } = useGeneralStore()
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([])
 
-  // Tag autocomplete works off the cached feed; no extra requests.
-  const tagSuggestions = useMemo(
-    () => searchTags(allPosts, searchQuery, 4),
-    [allPosts, searchQuery]
-  )
+  // Hashtags come from the hashtags table now. They used to be re-parsed out of
+  // the cached feed array, so autocomplete could only ever see tags belonging
+  // to the newest 100 posts in the whole app.
+  useEffect(() => {
+    const query = searchQuery.trim()
+    if (query.length < 2) {
+      setTagSuggestions([])
+      return
+    }
+
+    let active = true
+    const timer = setTimeout(async () => {
+      try {
+        const { data } = await supabase.rpc('search_hashtags', { p_query: query, p_limit: 4 })
+        if (active) setTagSuggestions(((data as any[]) ?? []).map((row) => row.tag))
+      } catch {
+        if (active) setTagSuggestions([])
+      }
+    }, 250)
+
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [searchQuery])
 
   const clearSearch = () => {
     setSearchProfiles([])
@@ -47,7 +68,10 @@ const TopNav = () => {
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [])
 
-  const handleSearchName = debounce(async (event: { target: { value: string } }) => {
+  // useMemo is load-bearing: this used to be created fresh on every render, so
+  // each keystroke got its own debounce timer starting from zero and every one
+  // of them fired. It was one query per character, just 500ms late.
+  const handleSearchName = useMemo(() => debounce(async (event: { target: { value: string } }) => {
     if (event.target.value == "") return setSearchProfiles([])
 
     try {
@@ -58,7 +82,7 @@ const TopNav = () => {
         console.log(error)
         setSearchProfiles([])
     }
-  }, 500)
+  }, 500), [])
 
   const goTo = () => {
     if (!userContext?.user) return setIsLoginOpen(true)

@@ -28,8 +28,11 @@ export const useGeneralStore = create<GeneralStore>()(
               },
           }),
           {
-              name: 'store',
-              storage: createJSONStorage(() => localStorage)
+              name: 'tt-general',
+              storage: createJSONStorage(() => localStorage),
+              // Only the cached list is worth persisting. Persisting the modal
+              // flags meant a reload could reopen the login sheet on its own.
+              partialize: (state) => ({ randomUsers: state.randomUsers }),
           }
       )
   )

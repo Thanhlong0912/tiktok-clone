@@ -2,17 +2,24 @@
 
 import moment from 'moment'
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
-import { AiFillHeart } from 'react-icons/ai'
-import { FaCommentDots, FaUserPlus } from 'react-icons/fa'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { AiFillHeart, AiOutlineRetweet } from 'react-icons/ai'
+import { FaCommentDots, FaUserPlus, FaAt } from 'react-icons/fa'
 import { BiBell } from 'react-icons/bi'
 import ClientOnly from '../components/ClientOnly'
 import MainLayout from '../layouts/MainLayout'
 import MobileBottomNav from '../components/MobileBottomNav'
 import { useUser } from '../context/user'
 import { useGeneralStore } from '../stores/general'
-import useCreateBucketUrl from '../hooks/useCreateBucketUrl'
-import useGetActivity, { ActivityItem, ActivityType } from '../hooks/useGetActivity'
+import { createBucketUrl } from '../hooks/useCreateBucketUrl'
+import {
+  fetchNotifications,
+  markNotificationsRead,
+  nextNotificationCursor,
+  type NotificationCursor,
+  type NotificationItem,
+  type NotificationType,
+} from '../utils/notifications'
 
 const TABS = [
   { id: 'all', label: 'All activity', icon: BiBell },
@@ -21,29 +28,43 @@ const TABS = [
   { id: 'followers', label: 'Followers', icon: FaUserPlus },
 ] as const
 
-const TAB_TYPE: Record<string, ActivityType | null> = {
+const TAB_TYPE: Record<string, NotificationType | null> = {
   all: null,
   likes: 'like',
   comments: 'comment',
   followers: 'follow',
 }
 
-const TYPE_META: Record<ActivityType, { icon: typeof AiFillHeart; iconClass: string; label: string }> = {
+const TYPE_META: Record<NotificationType, { icon: typeof AiFillHeart; iconClass: string; label: string }> = {
   like: { icon: AiFillHeart, iconClass: 'text-tiktok', label: 'liked your video' },
   comment: { icon: FaCommentDots, iconClass: 'text-tiktok-cyan', label: 'commented on your video' },
   follow: { icon: FaUserPlus, iconClass: 'text-ink', label: 'started following you' },
+  repost: { icon: AiOutlineRetweet, iconClass: 'text-tiktok-cyan', label: 'reposted your video' },
+  mention: { icon: FaAt, iconClass: 'text-ink', label: 'mentioned you' },
 }
 
 export default function ActivityPage() {
   const { user } = useUser() || {}
   const { setIsLoginOpen } = useGeneralStore()
   const [tab, setTab] = useState<(typeof TABS)[number]['id']>('all')
-  const [items, setItems] = useState<ActivityItem[]>([])
+  const [items, setItems] = useState<NotificationItem[]>([])
   const [isLoading, setIsLoading] = useState<boolean>(false)
+  const [isPaging, setIsPaging] = useState<boolean>(false)
   const [hasError, setHasError] = useState<boolean>(false)
+  const [hasMore, setHasMore] = useState<boolean>(true)
+  const [cursor, setCursor] = useState<NotificationCursor | null>(null)
   const [reloadKey, setReloadKey] = useState<number>(0)
   const active = TABS.find((t) => t.id === tab)!
 
+  /**
+   * Reads the notifications table written by the triggers in 0002.
+   *
+   * This page used to synthesise the list on every visit: fetch all of your
+   * post ids, then query likes, comments and follows separately, then fetch one
+   * profile per actor. It also applied its 50-row cap to each source BEFORE
+   * merging them, so a burst of likes could push every follow and comment out
+   * of the list entirely.
+   */
   useEffect(() => {
     let cancelled = false
 
@@ -56,8 +77,22 @@ export default function ActivityPage() {
       setIsLoading(true)
       setHasError(false)
       try {
-        const activity = await useGetActivity(user.id)
-        if (!cancelled) setItems(activity)
+        const page = await fetchNotifications(null, 30)
+        if (cancelled) return
+
+        setItems(page)
+        setCursor(nextNotificationCursor(page))
+        setHasMore(page.length >= 30)
+
+        // Opening the page is what marks them read.
+        if (page.some((item) => !item.read_at)) {
+          await markNotificationsRead()
+          if (!cancelled) {
+            setItems((current) =>
+              current.map((item) => (item.read_at ? item : { ...item, read_at: new Date().toISOString() }))
+            )
+          }
+        }
       } catch (error) {
         console.error(error)
         if (!cancelled) setHasError(true)
@@ -71,6 +106,22 @@ export default function ActivityPage() {
       cancelled = true
     }
   }, [user?.id, reloadKey])
+
+  const loadMore = useCallback(async () => {
+    if (!cursor || isPaging || !hasMore) return
+
+    setIsPaging(true)
+    try {
+      const page = await fetchNotifications(cursor, 30)
+      setItems((current) => current.concat(page))
+      setCursor(nextNotificationCursor(page))
+      setHasMore(page.length >= 30)
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setIsPaging(false)
+    }
+  }, [cursor, hasMore, isPaging])
 
   const visibleItems = useMemo(() => {
     const type = TAB_TYPE[tab]
@@ -152,17 +203,17 @@ export default function ActivityPage() {
               {visibleItems.map((item) => {
                 const meta = TYPE_META[item.type]
                 const TypeIcon = meta.icon
-                const href = item.type === 'follow'
-                  ? `/profile/${item.actor.user_id}`
-                  : `/post/${item.postId}/${item.postUserId}`
+                const href = item.type === 'follow' || !item.post_id
+                  ? `/profile/${item.actor_id}`
+                  : `/post/${item.post_id}/${user?.id}`
 
                 return (
                   <Link key={item.id} href={href} className="flex items-center gap-3 py-3 hover:bg-surface-subtle">
                     <span className="relative shrink-0">
                       <img
                         className="h-12 w-12 rounded-full object-cover"
-                        src={useCreateBucketUrl(item.actor.image)}
-                        alt={item.actor.name}
+                        src={createBucketUrl(item.actor_image)}
+                        alt=""
                       />
                       <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-surface shadow">
                         <TypeIcon size={11} className={meta.iconClass} />
@@ -170,17 +221,37 @@ export default function ActivityPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-[15px] text-ink">
-                        <span className="font-semibold">@{item.actor.name}</span>{' '}
+                        <span className="font-semibold">@{item.actor_name}</span>{' '}
                         <span className="text-ink-soft">{meta.label}</span>
                       </p>
-                      {item.commentText ? (
-                        <p className="mt-0.5 truncate text-[14px] text-ink">“{item.commentText}”</p>
+                      {item.preview ? (
+                        <p className="mt-0.5 truncate text-[14px] text-ink">“{item.preview}”</p>
                       ) : null}
-                      <p className="mt-0.5 text-[13px] text-ink-soft">{moment(item.createdAt).fromNow()}</p>
+                      <p className="mt-0.5 text-[13px] text-ink-soft">{moment(item.created_at).fromNow()}</p>
                     </div>
+
+                    {item.post_poster_key ? (
+                      <img
+                        className="h-14 w-10 shrink-0 rounded object-cover"
+                        src={createBucketUrl(item.post_poster_key)}
+                        alt=""
+                      />
+                    ) : null}
                   </Link>
                 )
               })}
+
+              {hasMore ? (
+                <div className="py-4 text-center">
+                  <button
+                    onClick={loadMore}
+                    disabled={isPaging}
+                    className="rounded-full bg-surface-subtle px-6 py-2 text-sm font-semibold text-ink disabled:opacity-60"
+                  >
+                    {isPaging ? 'Loading...' : 'Load more'}
+                  </button>
+                </div>
+              ) : null}
             </div>
           )}
         </ClientOnly>

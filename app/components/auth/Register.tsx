@@ -5,6 +5,7 @@ import { BiLoaderCircle } from 'react-icons/bi';
 import { useUser } from '@/app/context/user';
 import { useRouter } from 'next/navigation';
 import { useGeneralStore } from '@/app/stores/general';
+import { isValidEmail } from '@/app/utils/email'
 
 const Register = () => {
     let { setIsLoginOpen } = useGeneralStore();
@@ -30,15 +31,13 @@ const Register = () => {
     setError(null)
     let isError = false
 
-    const reg = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/
-
     if (!name) {
         setError({ type: 'name', message: 'A Name is required'})
         isError = true
     } else if (!email) {
         setError({ type: 'email', message: 'An Email is required'})
         isError = true
-    } else if (!reg.test(email)) {
+    } else if (!isValidEmail(email)) {
         setError({ type: 'email', message: 'The Email is not valid'})
         isError = true
     } else if (!password) {

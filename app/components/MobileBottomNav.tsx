@@ -3,10 +3,12 @@
 import { usePathname, useRouter } from 'next/navigation'
 import { AiFillHome, AiOutlineHome } from 'react-icons/ai'
 import { IoCompass, IoCompassOutline, IoAdd } from 'react-icons/io5'
-import { BiMessageDetail, BiMessageRounded } from 'react-icons/bi'
+import { BiBell, BiSolidBell } from 'react-icons/bi'
 import { BsPersonFill, BsPerson } from 'react-icons/bs'
+import { useEffect, useState } from 'react'
 import { useUser } from '../context/user'
 import { useGeneralStore } from '../stores/general'
+import { fetchUnreadNotificationCount } from '../utils/notifications'
 
 interface MobileBottomNavProps {
   /** Rendered over a dark video feed (transparent bg) vs. a normal page (solid bg). */
@@ -26,6 +28,22 @@ const MobileBottomNav = ({ variant = 'solid' }: MobileBottomNavProps) => {
     }
     router.push(target)
   }
+
+  const [unreadCount, setUnreadCount] = useState<number>(0)
+
+  useEffect(() => {
+    if (!user?.id) {
+      setUnreadCount(0)
+      return
+    }
+
+    let active = true
+    fetchUnreadNotificationCount()
+      .then((count) => { if (active) setUnreadCount(count) })
+      .catch(() => null)
+
+    return () => { active = false }
+  }, [user?.id, pathname])
 
   const isHome = pathname === '/'
   const isExplore = pathname === '/explore'
@@ -72,12 +90,18 @@ const MobileBottomNav = ({ variant = 'solid' }: MobileBottomNavProps) => {
           </span>
         </button>
 
+        {/*
+          Was labelled "Inbox" with message-bubble icons while routing to
+          notifications. There is no messaging in this app, so the label now
+          matches the destination.
+        */}
         <NavButton
-          label="Inbox"
+          label="Activity"
           active={isActivity}
           inactiveClass={inactive}
           onClick={() => requireAuth('/activity')}
-          Icon={isActivity ? BiMessageDetail : BiMessageRounded}
+          Icon={isActivity ? BiSolidBell : BiBell}
+          badge={unreadCount}
         />
         <NavButton
           label="Profile"
@@ -97,20 +121,35 @@ const NavButton = ({
   active,
   inactiveClass,
   onClick,
+  badge = 0,
 }: {
   label: string
   Icon: React.ComponentType<{ size?: number }>
   active: boolean
   inactiveClass: string
   onClick: () => void
+  badge?: number
 }) => (
   <button
     onClick={onClick}
+    // aria-current is the only thing that conveyed the active tab to assistive
+    // tech; it used to be signalled by font weight alone.
+    aria-current={active ? 'page' : undefined}
     className={`flex flex-col items-center gap-0.5 text-[10px] font-medium ${
       active ? 'font-semibold' : inactiveClass
     }`}
   >
-    <Icon size={22} />
+    <span className="relative">
+      <Icon size={22} />
+      {badge > 0 ? (
+        <span
+          aria-label={`${badge} unread`}
+          className="absolute -right-2 -top-1 min-w-[16px] rounded-full bg-tiktok px-1 text-[10px] font-bold leading-4 text-white"
+        >
+          {badge > 99 ? '99+' : badge}
+        </span>
+      ) : null}
+    </span>
     <span>{label}</span>
   </button>
 )

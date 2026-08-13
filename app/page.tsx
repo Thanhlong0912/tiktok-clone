@@ -1,10 +1,9 @@
 "use client"
 
 import { useUser } from "@/app/context/user"
-import useGetFollowing from "@/app/hooks/useGetFollowing"
 import { useGeneralStore } from "@/app/stores/general"
 import { usePostStore } from "@/app/stores/post"
-import { TouchEvent, UIEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { TouchEvent, UIEvent, useCallback, useEffect, useRef, useState } from "react"
 import ClientOnly from "./components/ClientOnly"
 import PostMain from "./components/PostMain"
 import PostSkeleton from "./components/PostSkeleton"
@@ -22,8 +21,6 @@ export default function Home() {
   const MOBILE_WINDOW_RADIUS = 2
   const { user } = useUser() || {}
   const { setIsLoginOpen } = useGeneralStore()
-  const [mobileFeedTab, setMobileFeedTab] = useState<MobileFeedTab>('for-you')
-  const [followingUserIds, setFollowingUserIds] = useState<string[]>([])
   const [isMobileViewport, setIsMobileViewport] = useState<boolean>(false)
   const [mobileViewportHeight, setMobileViewportHeight] = useState<number>(0)
   const [mobileVisibleIndex, setMobileVisibleIndex] = useState<number>(0)
@@ -39,49 +36,36 @@ export default function Home() {
     'for-you': { scrollTop: 0, visibleIndex: 0 },
     'following': { scrollTop: 0, visibleIndex: 0 },
   })
-  let { allPosts, setAllPosts, isFeedLoading, feedError } = usePostStore();
+  const {
+    allPosts: displayedPosts,
+    setAllPosts,
+    loadMorePosts,
+    refreshFeed,
+    removePost,
+    patchPost,
+    setFeedKind,
+    feedKind,
+    isFeedLoading,
+    isPageLoading,
+    feedError,
+    hasMore,
+  } = usePostStore();
 
-  useEffect(() => { setAllPosts()}, [])
+  const mobileFeedTab: MobileFeedTab = feedKind === 'following' ? 'following' : 'for-you'
+
+  useEffect(() => { void setAllPosts() }, [setAllPosts])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
     if (params.get('feed') === 'following' && user?.id) {
-      setMobileFeedTab('following')
+      setFeedKind('following')
     }
-  }, [user?.id])
+  }, [setFeedKind, user?.id])
 
-  useEffect(() => {
-    const hydrateFollowing = async () => {
-      if (!user?.id) {
-        setFollowingUserIds([])
-        return
-      }
-
-      try {
-        const followingDocs = await useGetFollowing(user.id)
-        const ids = (followingDocs || []).map((doc) => doc?.to_user_id).filter(Boolean)
-        setFollowingUserIds(ids)
-      } catch (error) {
-        console.error(error)
-        setFollowingUserIds([])
-      }
-    }
-
-    hydrateFollowing()
-  }, [user?.id])
-
-  const displayedPosts = useMemo(() => {
-    if (mobileFeedTab === 'for-you') {
-      return allPosts
-    }
-
-    if (!user?.id) {
-      return []
-    }
-
-    return allPosts.filter((post) => followingUserIds.includes(post.user_id))
-  }, [allPosts, followingUserIds, mobileFeedTab, user?.id])
+  // The Following feed is now its own server query. It used to filter the
+  // globally-newest 100 posts client-side, so a followed creator's posts simply
+  // vanished once they fell outside that window.
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -91,7 +75,9 @@ export default function Home() {
     const media = window.matchMedia('(max-width: 767px)')
     const syncViewport = () => {
       setIsMobileViewport(media.matches)
-      setMobileViewportHeight(window.innerHeight)
+      // Desktop cards are 60px shorter than the viewport (the top nav), and
+      // the spacer maths has to match or scroll position drifts.
+      setMobileViewportHeight(media.matches ? window.innerHeight : window.innerHeight - 60)
     }
 
     syncViewport()
@@ -124,12 +110,15 @@ export default function Home() {
       const tag = target?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return
 
+      // behavior:'auto', not 'smooth'. Chromium cancels a smooth programmatic
+      // scroll inside a `scroll-snap-type: mandatory` container and snaps back
+      // to where it started, so keyboard navigation silently did nothing.
       if (event.key === 'ArrowDown' || event.key === 'j') {
         event.preventDefault()
-        container.scrollBy({ top: container.clientHeight, behavior: 'smooth' })
+        container.scrollBy({ top: container.clientHeight, behavior: 'auto' })
       } else if (event.key === 'ArrowUp' || event.key === 'k') {
         event.preventDefault()
-        container.scrollBy({ top: -container.clientHeight, behavior: 'smooth' })
+        container.scrollBy({ top: -container.clientHeight, behavior: 'auto' })
       } else if (event.key === 'm') {
         event.preventDefault()
         setVideoSoundEnabled(!getVideoSoundEnabled())
@@ -167,18 +156,25 @@ export default function Home() {
     setMobileVisibleIndex((prev) => Math.min(prev, Math.max(displayedPosts.length - 1, 0)))
   }, [displayedPosts.length])
 
-  const shouldVirtualize = isMobileViewport && displayedPosts.length > 6 && mobileViewportHeight > 0
-  const virtualStartIndex = shouldVirtualize ? Math.max(0, mobileVisibleIndex - MOBILE_WINDOW_RADIUS) : 0
-  const virtualEndIndex = shouldVirtualize
+  /**
+   * Virtualization.
+   *
+   * Every post keeps a full-height slot in the DOM; only those inside the
+   * window mount a real PostMain (and therefore a <video>). The rest render an
+   * empty placeholder of the same height.
+   *
+   * The obvious implementation -- collapse the off-window posts into two big
+   * spacer divs -- is broken under `snap-mandatory`: a spacer contains no snap
+   * points, so the browser refuses to leave the last real one and yanks the
+   * scroll back. Because the scroll never lands, the handler that advances the
+   * window never runs either, and the feed deadlocks after the first few posts.
+   * Keeping one snap-start slot per post is what avoids that.
+   */
+  const shouldVirtualize = displayedPosts.length > 6 && mobileViewportHeight > 0
+  const windowStart = shouldVirtualize ? Math.max(0, mobileVisibleIndex - MOBILE_WINDOW_RADIUS) : 0
+  const windowEnd = shouldVirtualize
     ? Math.min(displayedPosts.length - 1, mobileVisibleIndex + MOBILE_WINDOW_RADIUS)
-    : Math.max(displayedPosts.length - 1, 0)
-  const virtualizedPosts = shouldVirtualize
-    ? displayedPosts.slice(virtualStartIndex, virtualEndIndex + 1)
-    : displayedPosts
-  const topSpacerHeight = shouldVirtualize ? virtualStartIndex * mobileViewportHeight : 0
-  const bottomSpacerHeight = shouldVirtualize
-    ? Math.max(displayedPosts.length - virtualEndIndex - 1, 0) * mobileViewportHeight
-    : 0
+    : displayedPosts.length - 1
 
   useEffect(() => {
     if (!pendingTabRestoreRef.current) {
@@ -205,13 +201,13 @@ export default function Home() {
     }
   }, [saveTabPosition])
 
-  const switchToForYou = () => setMobileFeedTab('for-you')
+  const switchToForYou = () => setFeedKind('for-you')
   const switchToFollowing = () => {
     if (!user?.id) {
       setIsLoginOpen(true)
       return
     }
-    setMobileFeedTab('following')
+    setFeedKind('following')
   }
 
   const handleTouchStart = (event: TouchEvent<HTMLDivElement>) => {
@@ -243,11 +239,19 @@ export default function Home() {
   }
 
   const handleFeedScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
+    const container = event.currentTarget
+
+    // Fetch the next page while there is still a screen or two of runway, so
+    // the viewer never reaches the end of the loaded list.
+    const remaining = container.scrollHeight - container.scrollTop - container.clientHeight
+    if (remaining < container.clientHeight * 2) {
+      void loadMorePosts()
+    }
+
     if (!shouldVirtualize) {
       return
     }
 
-    const container = event.currentTarget
     const height = mobileViewportHeight || container.clientHeight
     if (!height) {
       return
@@ -255,7 +259,7 @@ export default function Home() {
 
     const nextIndex = Math.round(container.scrollTop / height)
     setMobileVisibleIndex((prev) => (prev === nextIndex ? prev : nextIndex))
-  }, [mobileViewportHeight, shouldVirtualize])
+  }, [loadMorePosts, mobileViewportHeight, shouldVirtualize])
 
   const handleAutoScrollChange = useCallback((enabled: boolean) => {
     isAutoScrollEnabledRef.current = enabled
@@ -294,9 +298,11 @@ export default function Home() {
 
     lastAutoScrolledPostRef.current = { postId, handledAt: Date.now() }
     setMobileVisibleIndex(nextIndex)
+    // See the keyboard handler above: mandatory snap cancels smooth scrolls,
+    // which is why auto-advance never actually advanced.
     feedElement.scrollTo({
       top: targetScrollTop,
-      behavior: 'smooth',
+      behavior: 'auto',
     })
   }, [displayedPosts, mobileViewportHeight])
 
@@ -327,7 +333,7 @@ export default function Home() {
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
           onScroll={handleFeedScroll}
-          className="w-full h-[100dvh] overflow-y-scroll snap-y snap-mandatory scroll-smooth no-scrollbar md:mt-[60px] md:h-[calc(100vh-60px)] lg:pl-[300px]"
+          className="w-full h-[100dvh] overflow-y-scroll snap-y snap-mandatory no-scrollbar md:mt-[60px] md:h-[calc(100vh-60px)] lg:pl-[300px]"
         >
           <ClientOnly>
             {displayedPosts.length < 1 && isFeedLoading ? (
@@ -339,7 +345,7 @@ export default function Home() {
                     <p className="text-lg font-semibold">Couldn&apos;t load the feed.</p>
                     <p className="mt-2 text-sm text-white/80 md:text-gray-500">Check your connection and try again.</p>
                     <button
-                      onClick={() => setAllPosts()}
+                      onClick={() => void refreshFeed()}
                       className="mt-4 rounded-full bg-tiktok px-6 py-2 text-sm font-semibold text-white hover:bg-tiktok-hover"
                     >
                       Retry
@@ -356,23 +362,46 @@ export default function Home() {
               </div>
             ) : (
               <>
-                {shouldVirtualize && topSpacerHeight > 0 ? (
-                  <div aria-hidden="true" style={{ height: `${topSpacerHeight}px` }} />
+                {displayedPosts.map((post, index) =>
+                  index >= windowStart && index <= windowEnd ? (
+                    <PostMain
+                      post={post}
+                      key={post.id}
+                      feedIndex={index}
+                      isAutoScrollEnabled={isAutoScrollEnabled}
+                      onVideoEnded={handleVideoEnded}
+                      onAutoScrollChange={handleAutoScrollChange}
+                      onRemove={removePost}
+                      onPostChange={patchPost}
+                    />
+                  ) : (
+                    <div
+                      key={post.id}
+                      aria-hidden="true"
+                      data-feed-placeholder={index}
+                      className="snap-start h-[100dvh] md:h-[calc(100vh-60px)]"
+                    />
+                  )
+                )}
+
+                {isPageLoading ? (
+                  <div className="flex h-24 items-center justify-center text-sm text-white/70 md:text-ink-soft">
+                    Loading more...
+                  </div>
                 ) : null}
 
-                {virtualizedPosts.map((post, index) => (
-                  <PostMain
-                    post={post}
-                    key={`${post.id}-${virtualStartIndex + index}`}
-                    feedIndex={virtualStartIndex + index}
-                    isAutoScrollEnabled={isAutoScrollEnabled}
-                    onVideoEnded={handleVideoEnded}
-                    onAutoScrollChange={handleAutoScrollChange}
-                  />
-                ))}
-
-                {shouldVirtualize && bottomSpacerHeight > 0 ? (
-                  <div aria-hidden="true" style={{ height: `${bottomSpacerHeight}px` }} />
+                {!hasMore ? (
+                  <div className="flex h-32 snap-start items-center justify-center px-8 text-center text-sm text-white/70 md:text-ink-soft">
+                    <div>
+                      <p>You are all caught up.</p>
+                      <button
+                        onClick={() => void refreshFeed()}
+                        className="mt-3 rounded-full bg-tiktok px-5 py-2 text-sm font-semibold text-white hover:bg-tiktok-hover"
+                      >
+                        Refresh feed
+                      </button>
+                    </div>
+                  </div>
                 ) : null}
               </>
             )}

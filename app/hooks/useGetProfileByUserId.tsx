@@ -1,20 +1,24 @@
-import { supabase } from "@/libs/supabase"
+import { fetchProfile } from "../utils/feed"
 
+/**
+ * Profile plus follower/following/post counts, total likes, and whether the
+ * viewer follows or has blocked them -- one call. The profile page previously
+ * needed four round trips for this, one of which issued a likes query PER POST
+ * just to sum the like total.
+ */
 const useGetProfileByUserId = async (userId: string) => {
-    const { data, error } = await supabase
-        .from('profiles')
-        .select('id, user_id, name, image, bio')
-        .eq('user_id', userId)
-        .maybeSingle()
+    const profile = await fetchProfile(userId)
 
-    if (error) throw error
+    if (!profile) {
+        return { id: '', user_id: '', name: '', image: '', bio: '' }
+    }
 
     return {
-        id: data?.id,
-        user_id: data?.user_id,
-        name: data?.name,
-        image: data?.image,
-        bio: data?.bio
+        id: profile.user_id,
+        user_id: profile.user_id,
+        name: profile.name,
+        image: profile.image,
+        bio: profile.bio,
     }
 }
 

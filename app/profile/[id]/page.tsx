@@ -6,19 +6,13 @@ import { useUser } from "@/app/context/user"
 import useCreateBucketUrl from "@/app/hooks/useCreateBucketUrl"
 import useCreateFollow from "@/app/hooks/useCreateFollow"
 import useDeleteFollow from "@/app/hooks/useDeleteFollow"
-import useGetFollowers from "@/app/hooks/useGetFollowers"
-import useGetFollowing from "@/app/hooks/useGetFollowing"
-import useGetLikedPosts from "@/app/hooks/useGetLikedPosts"
-import useGetLikesByPostId from "@/app/hooks/useGetLikesByPostId"
-import useGetRepostedPosts from "@/app/hooks/useGetRepostedPosts"
-import useGetSavedPosts from "@/app/hooks/useGetSavedPosts"
 import useIsFollowing from "@/app/hooks/useIsFollowing"
+import { fetchProfile, fetchUserPosts, type ProfileSummary } from "@/app/utils/feed"
 import MainLayout from "@/app/layouts/MainLayout"
 import MobileBottomNav from "@/app/components/MobileBottomNav"
 import { useGeneralStore } from "@/app/stores/general"
 import { usePostStore } from "@/app/stores/post"
-import { useProfileStore } from "@/app/stores/profile"
-import { PostWithProfile, ProfilePageTypes, User } from "@/app/types"
+import { PostWithProfile, ProfilePageTypes } from "@/app/types"
 import { formatCount } from "@/app/utils/formatNumber"
 import { showToast } from "@/app/utils/toast"
 import { useCallback, useEffect, useState } from "react"
@@ -29,50 +23,50 @@ import { FiShare } from "react-icons/fi"
 const Profile = ({ params }: ProfilePageTypes) => {
     const contextUser = useUser()
     let { postsByUser, setPostsByUser } = usePostStore()
-    let { setCurrentProfile, currentProfile } = useProfileStore()
-    let { isEditProfileOpen, setIsEditProfileOpen } = useGeneralStore()
+    const { isEditProfileOpen, setIsEditProfileOpen, setIsLoginOpen } = useGeneralStore()
     const [followId, setFollowId] = useState<string | null>(null)
-    const [followersCount, setFollowersCount] = useState<number>(0)
-    const [followingCount, setFollowingCount] = useState<number>(0)
-    const [likesCount, setLikesCount] = useState<number>(0)
     type ProfileTab = 'posts' | 'liked' | 'saved' | 'reposts'
     const [activeTab, setActiveTab] = useState<ProfileTab>('posts')
     const [likedPosts, setLikedPosts] = useState<PostWithProfile[]>([])
     const [savedPosts, setSavedPosts] = useState<PostWithProfile[]>([])
     const [repostedPosts, setRepostedPosts] = useState<PostWithProfile[]>([])
     const [isLoadingTab, setIsLoadingTab] = useState<boolean>(false)
+    const [tabError, setTabError] = useState<boolean>(false)
     const isOwnProfile = contextUser?.user?.id == params?.id
 
-    useEffect(() => {
-        const getStats = async () => {
-            if (!params?.id) return;
-            const followers = await useGetFollowers(params.id);
-            setFollowersCount(followers.length);
-            
-            const following = await useGetFollowing(params.id);
-            setFollowingCount(following.length);
-        }
-        getStats();
-    }, [params?.id, followId]) // Update stats when follow status changes (e.g. self follow/unfollow)
+    const [summary, setSummary] = useState<ProfileSummary | null>(null)
+    const [statsError, setStatsError] = useState<boolean>(false)
 
+    // One row from get_profile drives the whole header. The page previously
+    // also pulled the same profile through useProfileStore, so every visit
+    // fetched it twice.
+    const currentProfile = summary
+    const followersCount = summary?.follower_count ?? 0
+    const followingCount = summary?.following_count ?? 0
+    const likesCount = Number(summary?.total_likes ?? 0)
+
+    // get_profile returns the profile, all three counts, the total like tally
+    // and is_following in ONE row. This used to be three round trips plus one
+    // likes query PER POST just to sum the like total -- a creator with 50
+    // posts pulled every like row they had ever received on every page view.
     useEffect(() => {
-        const getLikes = async () => {
-             if (!postsByUser || postsByUser.length < 1) {
-                 setLikesCount(0);
-                 return;
-             }
-             let totalLikes = 0;
-             // We can run these in parallel
-             const promises = postsByUser.map(async (post) => {
-                 const likes = await useGetLikesByPostId(post.id);
-                 return likes.length;
-             });
-             const results = await Promise.all(promises);
-             totalLikes = results.reduce((acc, curr) => acc + curr, 0);
-             setLikesCount(totalLikes);
+        let active = true
+
+        const loadSummary = async () => {
+            if (!params?.id) return
+            setStatsError(false)
+            try {
+                const result = await fetchProfile(params.id)
+                if (active) setSummary(result)
+            } catch (error) {
+                console.error(error)
+                if (active) setStatsError(true)
+            }
         }
-        getLikes();
-    }, [postsByUser])
+
+        loadSummary()
+        return () => { active = false }
+    }, [params?.id, followId])
 
     useEffect(() => {
         const checkFollow = async () => {
@@ -81,7 +75,6 @@ const Profile = ({ params }: ProfilePageTypes) => {
             setFollowId(id);
         }
         checkFollow();
-        setCurrentProfile(params?.id)
         setPostsByUser(params?.id)
     }, [contextUser?.user?.id, params?.id])
 
@@ -90,16 +83,19 @@ const Profile = ({ params }: ProfilePageTypes) => {
             if (!params?.id || activeTab === 'posts') return
 
             setIsLoadingTab(true)
+            setTabError(false)
             try {
-                if (activeTab === 'liked') {
-                    setLikedPosts(await useGetLikedPosts(params.id))
-                } else if (activeTab === 'reposts') {
-                    setRepostedPosts(await useGetRepostedPosts(params.id))
-                } else {
-                    setSavedPosts(await useGetSavedPosts(params.id))
-                }
+                // One call each, and 'saved' is enforced server-side rather than
+                // just hidden in the UI -- the rows were world-readable before.
+                const posts = await fetchUserPosts(params.id, activeTab, null)
+                if (activeTab === 'liked') setLikedPosts(posts)
+                else if (activeTab === 'reposts') setRepostedPosts(posts)
+                else setSavedPosts(posts)
             } catch (error) {
                 console.error(error)
+                // Previously swallowed, so a failed load rendered as
+                // "No liked posts yet" -- indistinguishable from an empty tab.
+                setTabError(true)
             } finally {
                 setIsLoadingTab(false)
             }
@@ -132,26 +128,36 @@ const Profile = ({ params }: ProfilePageTypes) => {
         }
     }, [currentProfile?.name, params.id])
 
+    const [isFollowLoading, setIsFollowLoading] = useState<boolean>(false)
+
     const toggleFollow = useCallback(async () => {
-        if (!contextUser?.user?.id || !params?.id) return;
-        
-        if (followId) {
-            try {
-                await useDeleteFollow(followId);
-                setFollowId(null);
-            } catch (error) {
-                console.error(error);
-            }
-        } else {
-            try {
-                await useCreateFollow(contextUser.user.id, params.id);
-                 const id = await useIsFollowing(contextUser.user.id, params.id);
-                 setFollowId(id);
-            } catch (error) {
-                console.error(error);
-            }
+        if (!contextUser?.user?.id) {
+            setIsLoginOpen(true)
+            return
         }
-    }, [contextUser?.user?.id, params?.id, followId]);
+        if (!params?.id || isFollowLoading) return
+
+        setIsFollowLoading(true)
+        const previous = followId
+
+        try {
+            if (previous) {
+                setFollowId(null)
+                await useDeleteFollow(previous)
+            } else {
+                // useCreateFollow already returns the new row id; the old code
+                // threw it away and issued a second query to read it back.
+                const id = await useCreateFollow(contextUser.user.id, params.id)
+                setFollowId(id)
+            }
+        } catch (error) {
+            console.error(error)
+            setFollowId(previous)
+            showToast(previous ? 'Could not unfollow' : 'Could not follow', 'error')
+        } finally {
+            setIsFollowLoading(false)
+        }
+    }, [contextUser?.user?.id, followId, isFollowLoading, params?.id, setIsLoginOpen]);
 
   return (
     <>
@@ -170,7 +176,7 @@ const Profile = ({ params }: ProfilePageTypes) => {
 
                 <div className="ml-5 w-full">
                     <ClientOnly>
-                        {(currentProfile as User)?.name ? (
+                        {currentProfile?.name ? (
                             <div>
                                 <p className="text-[30px] text-ink font-bold truncate">{currentProfile?.name}</p>
                                 <p className="text-[18px] text-ink-soft truncate">@{currentProfile?.name}</p>
@@ -184,7 +190,7 @@ const Profile = ({ params }: ProfilePageTypes) => {
                     <div className="flex items-center gap-2">
                         {isOwnProfile ? (
                             <button
-                                onClick={() => setIsEditProfileOpen(isEditProfileOpen = !isEditProfileOpen)}
+                                onClick={() => setIsEditProfileOpen(!isEditProfileOpen)}
                                 className="flex item-center rounded-md py-1.5 px-3.5 mt-3 text-[15px] font-semibold border border-line hover:bg-surface-subtle text-ink"
                             >
                                 <BsPencil className="mt-0.5 mr-1" size="18"/>
@@ -255,6 +261,16 @@ const Profile = ({ params }: ProfilePageTypes) => {
                     {activeTab !== 'posts' && isLoadingTab ? (
                         <div className="flex justify-center items-center h-20 col-span-full">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-ink"></div>
+                        </div>
+                    ) : tabError ? (
+                        <div className="col-span-full py-8 text-center">
+                            <p className="text-[15px] font-semibold text-ink">Could not load these posts.</p>
+                            <button
+                                onClick={() => setActiveTab(activeTab)}
+                                className="mt-3 rounded-full bg-tiktok px-5 py-2 text-sm font-semibold text-white hover:bg-tiktok-hover"
+                            >
+                                Try again
+                            </button>
                         </div>
                     ) : activeTab === 'liked' ? (
                         likedPosts.length > 0 ? (

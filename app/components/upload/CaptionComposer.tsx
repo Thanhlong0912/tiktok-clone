@@ -11,7 +11,7 @@ import useSearchProfilesByName from '../../hooks/useSearchProfilesByName'
 import { usePostStore } from '../../stores/post'
 import { RandomUsers } from '../../types'
 import { foldName, rememberMention } from '../../utils/mentions'
-import { getTrendingTags, searchTags } from '../../utils/postTags'
+import { supabase } from '@/libs/supabase'
 
 type ActiveToken = {
   start: number
@@ -109,12 +109,36 @@ const CaptionComposer = ({
     setActiveToken(tokenAtCaret(el.value, el.selectionStart))
   }
 
-  const tagSuggestions = useMemo(() => {
-    if (activeToken?.kind !== 'hashtag') return []
-    return activeToken.query
-      ? searchTags(allPosts, activeToken.query, 5)
-      : getTrendingTags(allPosts, 5)
-  }, [activeToken, allPosts])
+  // Hashtag suggestions come from the hashtags table (search_hashtags for a
+  // partial token, get_trending_hashtags for a bare '#'). They used to be
+  // parsed out of the cached feed, which only ever covered the newest 100 posts.
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([])
+
+  useEffect(() => {
+    if (activeToken?.kind !== 'hashtag') {
+      setTagSuggestions([])
+      return
+    }
+
+    let active = true
+    const query = activeToken.query
+
+    const timer = setTimeout(async () => {
+      try {
+        const { data } = query
+          ? await supabase.rpc('search_hashtags', { p_query: query, p_limit: 5 })
+          : await supabase.rpc('get_trending_hashtags', { p_limit: 5 })
+        if (active) setTagSuggestions(((data as any[]) ?? []).map((row) => row.tag))
+      } catch {
+        if (active) setTagSuggestions([])
+      }
+    }, 200)
+
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [activeToken?.kind, activeToken?.query])
 
   const searchMentions = useMemo(
     () =>

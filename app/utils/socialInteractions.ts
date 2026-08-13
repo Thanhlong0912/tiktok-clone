@@ -1,9 +1,19 @@
 import { supabase } from '@/libs/supabase'
 
 /**
- * Data layer for the engagement features that share the same shape as likes:
- * Save/Bookmark and Repost. Both are backed by their own table (`saves` /
- * `reposts`) holding a `user_id` and a `post_id`.
+ * Writes for the engagement features that share the same shape as likes:
+ * Save/Bookmark and Repost, backed by the `saves` / `reposts` tables.
+ *
+ * These stay as DIRECT table writes rather than moving to an RPC. RLS already
+ * enforces `auth.uid() = user_id` on the insert, and the counter triggers added
+ * in 0002 keep posts.save_count / repost_count exact in the same transaction.
+ * Wrapping them in a SECURITY DEFINER function would replace that declarative
+ * check with hand-written authorization for no benefit.
+ *
+ * The READ side is gone: getInteractionsByPost/ByUser existed only to count
+ * rows and to answer "did I save this", and both now arrive with the post from
+ * get_feed. They were responsible for 2 of the 5 requests every feed card made,
+ * and re-ran in every mounted card on every save anywhere in the feed.
  */
 
 export type InteractionKind = 'save' | 'repost'
@@ -24,35 +34,6 @@ export const INTERACTION_EVENT = 'tt-interaction-change'
 function notifyChange(kind: InteractionKind) {
   if (typeof window === 'undefined') return
   window.dispatchEvent(new CustomEvent(INTERACTION_EVENT, { detail: { kind } }))
-}
-
-export async function getInteractionsByPost(
-  kind: InteractionKind,
-  postId: string
-): Promise<Interaction[]> {
-  const { data, error } = await supabase
-    .from(TABLE[kind])
-    .select('id, user_id, post_id')
-    .eq('post_id', postId)
-
-  if (error) throw error
-
-  return data ?? []
-}
-
-export async function getInteractionsByUser(
-  kind: InteractionKind,
-  userId: string
-): Promise<Interaction[]> {
-  const { data, error } = await supabase
-    .from(TABLE[kind])
-    .select('id, user_id, post_id')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-
-  if (error) throw error
-
-  return data ?? []
 }
 
 export async function createInteraction(

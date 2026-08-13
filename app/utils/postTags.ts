@@ -1,7 +1,18 @@
 /**
- * Tags are stored TikTok-style as #hashtags appended to the post caption
- * (`text` column). This avoids any schema change: old posts keep
- * working and Explore/search can filter by parsing the caption.
+ * Hashtags are written TikTok-style as #tags inside the post caption
+ * (`posts.text`). They are now ALSO extracted into the `hashtags` /
+ * `post_hashtags` tables by the sync_post_hashtags trigger, which is what
+ * search and trending read.
+ *
+ * What remains here is the compose-time half: parsing what the user typed
+ * before the post exists. `normalizeTag` must stay byte-identical to
+ * public.normalize_tag in supabase/migrations/0002_feed_and_signals.sql --
+ * postTags.test.ts pins the shared fixture that keeps them in step.
+ *
+ * The old countTags/getTrendingTags/searchTags helpers are gone: they scanned
+ * the cached 100-post feed array, so they could only ever see tags from the
+ * newest 100 posts in the entire app. Use the search_hashtags and
+ * get_trending_hashtags RPCs instead.
  */
 
 export const MAX_TAGS_PER_POST = 10
@@ -43,42 +54,4 @@ export function appendTagsToCaption(caption: string, tags: string[]): string {
 
   const hashtags = tags.map((tag) => `#${tag}`).join(' ')
   return cleanCaption ? `${cleanCaption} ${hashtags}` : hashtags
-}
-
-type Tagged = { text?: string | null }
-
-function countTags(posts: Tagged[]): Map<string, number> {
-  const counts = new Map<string, number>()
-  posts.forEach((post) => {
-    extractHashtags(post.text).forEach((tag) => {
-      counts.set(tag, (counts.get(tag) || 0) + 1)
-    })
-  })
-  return counts
-}
-
-/** Most-used tags across the given posts, most frequent first. */
-export function getTrendingTags(posts: Tagged[], limit = 10): string[] {
-  const entries: Array<[string, number]> = []
-  countTags(posts).forEach((count, tag) => entries.push([tag, count]))
-  return entries
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map((entry) => entry[0])
-}
-
-/** Tags matching a partial query, for autocomplete. Most frequent first. */
-export function searchTags(posts: Tagged[], query: string, limit = 6): string[] {
-  const clean = normalizeTag(query)
-  if (!clean) return []
-
-  const entries: Array<[string, number]> = []
-  countTags(posts).forEach((count, tag) => {
-    if (tag.includes(clean)) entries.push([tag, count])
-  })
-
-  return entries
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map((entry) => entry[0])
 }

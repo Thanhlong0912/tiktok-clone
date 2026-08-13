@@ -1,23 +1,22 @@
-import { supabase } from "@/libs/supabase"
+import { fetchTrendingCreators } from "../utils/feed"
 
+/**
+ * Suggested accounts. The old implementation selected the first five rows in
+ * physical table order and called it random; this ranks by recent engagement
+ * and excludes people you have blocked or already are.
+ */
 const useGetRandomUsers = async () => {
     try {
-        const { data, error } = await supabase
-            .from('profiles')
-            .select('user_id, name, image')
-            .limit(5)
+        const creators = await fetchTrendingCreators(5)
 
-        if (error) throw error
-
-        return (data ?? []).map(profile => {
-            return {
-                id: profile?.user_id,
-                name: profile?.name,
-                image: profile?.image,
-            }
-        })
+        return creators.map((creator) => ({
+            id: creator.user_id,
+            name: creator.name,
+            image: creator.image,
+        }))
     } catch (error) {
         console.log(error)
+        return []
     }
 }
 

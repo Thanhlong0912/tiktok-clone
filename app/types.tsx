@@ -54,12 +54,41 @@ export interface Post {
   created_at: string;
 }
 
+export type PostMediaKind = 'video' | 'image'
+
+/**
+ * One row of public.feed_post. Counters and the viewer's own like/save/repost/
+ * follow state arrive WITH the post from get_feed, so a card renders without
+ * fetching anything of its own.
+ */
 export interface PostWithProfile {
   id: string;
   user_id: string;
   video_url: string;
   text: string;
   created_at: string;
+  /** Storage key of the cover frame. Empty for posts uploaded before covers. */
+  poster_key: string;
+  media_kind: PostMediaKind;
+  duration_ms: number | null;
+  width: number | null;
+  height: number | null;
+  like_count: number;
+  comment_count: number;
+  save_count: number;
+  repost_count: number;
+  share_count: number;
+  view_count: number;
+  is_liked: boolean;
+  is_saved: boolean;
+  is_reposted: boolean;
+  is_following: boolean;
+  /**
+   * Ranking score as the exact decimal STRING the server sent. Never parse it:
+   * the feed cursor compares it as a numeric tuple server-side, and a JS
+   * round-trip changes the value. See app/utils/feedCursor.ts.
+   */
+  score: string;
   profile: {
       user_id: string;
       name: string;
@@ -128,7 +157,9 @@ export interface SingleCommentCompTypes {
 }
 
 export interface PostUserCompTypes {
-  post: Post
+  // Was `Post`. Grid tiles now read like_count straight off the row instead of
+  // issuing one query per tile.
+  post: PostWithProfile
 }
 
 export interface PostMainCompTypes {
@@ -137,6 +168,10 @@ export interface PostMainCompTypes {
   isAutoScrollEnabled: boolean
   onVideoEnded: (postId: string) => void
   onAutoScrollChange: (enabled: boolean) => void
+  /** Removes the card from the feed after Not Interested or a block. */
+  onRemove?: (postId: string) => void
+  /** Lifts counter/flag changes back into the feed store so they survive scroll. */
+  onPostChange?: (postId: string, patch: Partial<PostWithProfile>) => void
 }
 
 export interface TextInputCompTypes {

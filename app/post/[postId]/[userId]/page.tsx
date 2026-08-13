@@ -7,7 +7,6 @@ import CommentsHeader from '@/app/components/post/CommentsHeader'
 import VideoOptionsMenu from '@/app/components/VideoOptionsMenu'
 import useCreateBucketUrl from '@/app/hooks/useCreateBucketUrl'
 import { useCommentStore } from '@/app/stores/comment'
-import { useLikeStore } from '@/app/stores/like'
 import { usePostStore } from '@/app/stores/post'
 import { PostPageTypes } from '@/app/types'
 import {
@@ -32,7 +31,6 @@ import { BsVolumeMuteFill, BsVolumeUpFill } from 'react-icons/bs'
 
 const Post = ({ params }: PostPageTypes) => {
   const { postById, postsByUser, setPostById, setPostsByUser } = usePostStore()
-  const { setLikesByPost } = useLikeStore()
   const { commentsByPost, setCommentsByPost } = useCommentStore()
 
   const [isMobileSheetExpanded, setIsMobileSheetExpanded] = useState<boolean>(false)
@@ -59,9 +57,8 @@ const Post = ({ params }: PostPageTypes) => {
   useEffect(() => {
     setPostById(params.postId)
     setCommentsByPost(params.postId)
-    setLikesByPost(params.postId)
     setPostsByUser(params.userId)
-  }, [params.postId, params.userId, setCommentsByPost, setLikesByPost, setPostById, setPostsByUser])
+  }, [params.postId, params.userId, setCommentsByPost, setPostById, setPostsByUser])
 
   useEffect(() => {
     if (shouldOpenCommentsMode) {
