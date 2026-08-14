@@ -6,14 +6,31 @@
  * data can be asserted in tests without touching a database.
  */
 
+import { captionFor, VIDEO_TOPICS, type Topic } from '../media/refreshPlan'
+
+/**
+ * A clip to hand out, carried with the metadata the post row needs.
+ *
+ * Not just the key: a seeded post that copies the key but leaves poster_key
+ * empty puts a thumbnail-less tile on Explore, which then downloads video bytes
+ * to paint its first frame.
+ */
+export interface SeedMedia {
+  key: string
+  posterKey: string
+  durationMs: number | null
+  width: number | null
+  height: number | null
+}
+
 export interface SeedOptions {
   seed: number
   /** Reference time; all created_at values are offsets back from this. */
   now: number
   userCount: number
   postCount: number
-  /** Storage keys to cycle through for post media. */
-  mediaKeys: string[]
+  /** Clips to cycle through for post media. */
+  media: SeedMedia[]
   /** Existing user ids to weave into the graph so real accounts get content. */
   existingUserIds?: string[]
 }
@@ -35,6 +52,10 @@ export interface PlannedPost {
   authorIndex: number
   text: string
   videoUrl: string
+  posterKey: string
+  durationMs: number | null
+  width: number | null
+  height: number | null
   createdAt: string
   /** 0..1 intrinsic appeal, drives how much synthetic engagement it attracts. */
   appeal: number
@@ -76,20 +97,14 @@ export function createRng(seed: number): () => number {
   }
 }
 
-const TOPICS = [
-  { tag: 'dance', words: ['choreo', 'routine', 'freestyle', 'moves'] },
-  { tag: 'cooking', words: ['recipe', 'kitchen', 'homemade', 'quick meal'] },
-  { tag: 'travel', words: ['sunset', 'roadtrip', 'hidden spot', 'city walk'] },
-  { tag: 'comedy', words: ['skit', 'prank', 'reaction', 'bit'] },
-  { tag: 'music', words: ['cover', 'riff', 'beat', 'session'] },
-  { tag: 'fitness', words: ['workout', 'form check', 'progress', 'routine'] },
-  { tag: 'diy', words: ['build', 'restore', 'upcycle', 'hack'] },
-  { tag: 'pets', words: ['puppy', 'cat nap', 'zoomies', 'good boy'] },
-  { tag: 'gaming', words: ['clutch', 'speedrun', 'boss fight', 'clip'] },
-  { tag: 'fashion', words: ['fit check', 'thrift haul', 'styling', 'lookbook'] },
-]
-
-const SECOND_TAGS = ['fyp', 'viral', 'tutorial', 'behindthescenes', 'howto', 'trending']
+/**
+ * Shared with the media refresh rather than defined twice.
+ *
+ * These are the topics the bucket's footage actually covers. A wider list --
+ * pets, gaming, cooking -- generates captions with no clip behind them, which
+ * is how "cat nap #pets" ended up over a street-market video.
+ */
+const TOPICS: Topic[] = ['ootd', 'travel', 'cafe', 'beauty', 'dance', 'daily', 'vibes']
 
 const FIRST_NAMES = [
   'Mai', 'Linh', 'Duc', 'Huy', 'Trang', 'Nam', 'Thao', 'Khanh', 'Quan', 'Ngoc',
@@ -119,6 +134,10 @@ export function planSeed(options: SeedOptions): SeedPlan {
   const rng = createRng(options.seed)
   const existing = options.existingUserIds ?? []
 
+  if (options.media.length === 0) {
+    throw new Error('planSeed needs at least one clip to hand out.')
+  }
+
   const users: PlannedUser[] = []
   for (let i = 0; i < options.userCount; i += 1) {
     const first = pick(rng, FIRST_NAMES)
@@ -131,7 +150,7 @@ export function planSeed(options: SeedOptions): SeedPlan {
       email: `seed${i}@seed.local.test`,
       password: `seed-pw-${options.seed}-${i}`,
       name: `${first} ${last}`,
-      bio: `${topic.tag} creator. seeded account.`,
+      bio: `${topic} creator. seeded account.`,
     })
   }
 
@@ -143,9 +162,13 @@ export function planSeed(options: SeedOptions): SeedPlan {
   const posts: PlannedPost[] = []
   for (let i = 0; i < options.postCount; i += 1) {
     const authorIndex = Math.floor(rng() * authorCount)
-    const topic = TOPICS[authorIndex % TOPICS.length]
-    const word = pick(rng, topic.words)
-    const second = pick(rng, SECOND_TAGS)
+    const media = options.media[i % options.media.length]
+
+    // The caption follows the CLIP, not the author. Deriving it from the author
+    // is what let a post describe something the video never shows; an untagged
+    // clip falls back to a topic so the text at least stays generic rather than
+    // asserting something specific and wrong.
+    const topic = VIDEO_TOPICS[media.key] ?? pick(rng, TOPICS)
 
     // Spread over 21 days, skewed towards recent so freshness decay and the
     // under-6h exploration bonus both have something to act on.
@@ -153,8 +176,12 @@ export function planSeed(options: SeedOptions): SeedPlan {
 
     posts.push({
       authorIndex,
-      text: `${word} #${topic.tag} #${second}`,
-      videoUrl: options.mediaKeys[i % options.mediaKeys.length],
+      text: captionFor(topic, rng),
+      videoUrl: media.key,
+      posterKey: media.posterKey,
+      durationMs: media.durationMs,
+      width: media.width,
+      height: media.height,
       createdAt: new Date(options.now - ageHours * 3600 * 1000).toISOString(),
       // Long tail: most posts are unremarkable, a few are hits.
       appeal: Math.pow(rng(), 3),

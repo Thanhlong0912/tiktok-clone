@@ -1,4 +1,4 @@
-import useCreateBucketUrl from '@/app/hooks/useCreateBucketUrl'
+import useCreateBucketUrl, { createBucketUrl } from '@/app/hooks/useCreateBucketUrl'
 import { PostUserCompTypes } from "@/app/types"
 import { getImagePostAudioId, getImagePostIds, isImagePost } from '@/app/utils/postMedia'
 import { pauseOtherVideos, pauseVideosDuringNavigation, rememberVideoPlayback } from '@/app/utils/videoPlayback'
@@ -104,6 +104,12 @@ const PostUser = ({ post }: PostUserCompTypes) => {
                       loop
                       muted
                       playsInline
+                      // Without a poster the tile stays blank until the browser
+                      // has decoded a frame, so a profile grid paints empty
+                      // rectangles above its captions. Explore already covers
+                      // this; the same row carries poster_key here too.
+                      preload="metadata"
+                      poster={post.poster_key ? createBucketUrl(post.poster_key) : undefined}
                       className="aspect-[3/4] object-cover rounded-md"
                       src={useCreateBucketUrl(post.video_url)}
                   />

@@ -2,8 +2,9 @@
 
 Backup, sync, and migration are handled by [rclone](https://rclone.org), which
 already does concurrent transfer, resume, and checksum comparison against
-Supabase's S3-compatible endpoint. Only orphan detection needs custom code,
-because it has to join bucket contents against application tables.
+Supabase's S3-compatible endpoint. Orphan detection, refreshing post media, and
+verifying references need custom code, because they have to join bucket
+contents against application tables.
 
 ## Prerequisites
 
@@ -105,6 +106,74 @@ After the objects are in place, point the app at the new host by setting
 `NEXT_PUBLIC_MEDIA_BASE_URL` to the new public base url. Uploads still go to
 Supabase until `libs/storage/index.ts` is repointed as well.
 
+## Refresh post media
+
+Spreads the clips that are actually in the bucket across the posts that
+reference them, and fills in everything the post row needs to render.
+
+```bash
+npm run media:refresh
+```
+
+Report only. To write:
+
+```bash
+npm run media:refresh -- --apply
+```
+
+Needs `ffmpeg` and `ffprobe` on PATH (`brew install ffmpeg`), plus
+`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_BUCKET`, and
+`SUPABASE_SERVICE_ROLE_KEY`. It uses the service role key and rewrites post and
+profile rows wholesale, so it is a **development** tool — never point it at
+production.
+
+What one run does:
+
+- Probes every video in the bucket and keeps the ones a browser can actually
+  play in a vertical feed: h264 only (Chrome and Firefox refuse hevc) and
+  portrait only (landscape letterboxes into black bars). Clips that decode fine
+  but do not belong in a feed are excluded by key in `EXCLUDED_VIDEOS`.
+- Spreads those clips evenly across posts, round-robin over a shuffled
+  catalogue, never repeating a clip back to back for the same creator.
+- Generates a poster per clip and uploads it to `image/poster-<name>.webp`,
+  matching the frame time, max edge, and quality the browser upload path uses
+  (`app/utils/posterFrame.ts`). It samples several candidate frames and keeps
+  the one that encodes largest, which is what rejects motion-blurred covers.
+- Fills in `poster_key`, `duration_ms`, `width`, and `height`.
+- Rewrites captions from the topic each clip is tagged with in `VIDEO_TOPICS`,
+  so the text matches what is on screen.
+- Turns one post into an image carousel from the untagged images in `image/`.
+- Gives each seeded profile a distinct avatar cropped from a clip it posted,
+  and a bio naming the topic it actually posts.
+
+Deterministic: the same `--seed` produces the same plan, so the report and the
+`--apply` that follows it agree. Pass `--seed=<n>` to reshuffle, or
+`--skip-avatars` to leave profile images alone.
+
+Object keys are derived from the video name rather than randomly, so re-running
+overwrites the same poster and avatar objects instead of orphaning the old ones.
+That also means a re-run serves new bytes at an unchanged URL — browsers and
+CDNs holding the previous copy need a cache bust to see it.
+
+`--apply` writes the full before-state to `media-refresh-backup-<epoch>.json`
+first (gitignored), which is the rollback path if a plan turns out wrong.
+
+## Verify every reference resolves
+
+```bash
+npm run media:verify
+```
+
+Requests every distinct key referenced by `posts` and `profiles` and checks
+both the status and that the content type matches how the app uses it — a
+`poster_key` resolving to a video renders just as broken as a 404. Exits
+non-zero on any failure, so it can gate a deploy. It also reports posts still
+missing a poster or dimensions.
+
+A row pointing at a key that is not in the bucket looks completely healthy in
+SQL and only shows up as a black rectangle in the feed, which is the failure
+this exists to catch.
+
 ## Find orphaned objects
 
 Objects that no post or profile row references — left behind by failed uploads
@@ -125,6 +194,15 @@ See the prerequisites above — this needs `.env` populated and Node ≥ 20.6.
 Objects newer than 24 hours are never deleted, because an upload that lands
 between the bucket listing and the database read is indistinguishable from an
 orphan. Adjust with `--min-age=48`.
+
+**Interaction with `media:refresh`.** Media the refresh rejects — the hevc and
+landscape clips, the screen recording, the watermarked images — is deliberately
+left in the bucket but referenced by nothing, which is indistinguishable from
+an orphan from this script's side. `--delete` will remove it. That is fine if
+the intent is to be rid of it; if the intent was to keep it for later, read the
+report before deleting, because the exclusion lists in `refreshPlan.ts` are the
+only remaining record that those objects were a decision rather than an
+accident.
 
 ### Safety guards
 

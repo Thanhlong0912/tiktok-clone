@@ -42,6 +42,9 @@ pnpm-debug.log*
 # vercel
 .vercel
 
+# before-state dumps written by `npm run media:refresh -- --apply`
+media-refresh-backup-*.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

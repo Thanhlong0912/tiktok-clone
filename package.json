@@ -10,6 +10,8 @@
     "test": "VITE_CONFIG_NATIVE_IGNORE_WARNING=true vitest run",
     "test:watch": "VITE_CONFIG_NATIVE_IGNORE_WARNING=true vitest",
     "media:orphans": "tsx --env-file=.env scripts/media/orphans.ts",
+    "media:refresh": "tsx --env-file=.env scripts/media/refresh.ts",
+    "media:verify": "tsx --env-file=.env scripts/media/verify.ts",
     "seed": "tsx --env-file=.env scripts/seed/seed.ts"
   },
   "dependencies": {

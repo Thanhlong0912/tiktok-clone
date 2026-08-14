@@ -13,7 +13,7 @@
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { planSeed, type SeedPlan } from './plan'
+import { planSeed, type SeedMedia, type SeedPlan } from './plan'
 
 const SEED_EMAIL_DOMAIN = 'seed.local.test'
 const CHUNK = 500
@@ -110,20 +110,43 @@ const main = async () => {
     const userCount = 25
     const postCount = 250
 
-    // Reuse whatever media keys already exist in the bucket. Seeded posts then
+    // Reuse whatever media already exists in the bucket. Seeded posts then
     // actually play instead of rendering a black rectangle -- which matters,
     // because a poster/playback regression is invisible against dead keys.
+    //
+    // The poster and dimensions come along with the key: copying the key alone
+    // produces posts that play but have no thumbnail, so every Explore tile
+    // downloads video to paint its first frame.
     const { data: existingPosts, error: postsError } = await db
         .from('posts')
-        .select('video_url, user_id')
+        .select('video_url, poster_key, duration_ms, width, height')
         .not('video_url', 'like', 'images:%')
-        .limit(20)
+        .is('deleted_at', null)
+        .limit(100)
     if (postsError) throw postsError
 
-    const mediaKeys = (existingPosts ?? []).map((row) => row.video_url as string)
-    if (mediaKeys.length < 1) {
+    // Distinct keys only. Borrowing rows would inherit the existing
+    // distribution, so a database where one clip is over-represented would
+    // reproduce that skew in every future seed.
+    const seenKeys: Record<string, boolean> = {}
+    const media: SeedMedia[] = []
+    for (const row of existingPosts ?? []) {
+        const key = row.video_url as string
+        if (!key || seenKeys[key]) continue
+        seenKeys[key] = true
+        media.push({
+            key,
+            posterKey: (row.poster_key as string) ?? '',
+            durationMs: row.duration_ms as number | null,
+            width: row.width as number | null,
+            height: row.height as number | null,
+        })
+    }
+
+    if (media.length < 1) {
         throw new Error(
-            'No existing video posts to borrow media keys from. Upload one video through the app first.'
+            'No existing video posts to borrow media from. Upload one video through ' +
+            'the app first, or run `npm run media:refresh -- --apply`.'
         )
     }
 
@@ -139,9 +162,11 @@ const main = async () => {
         now: Date.now(),
         userCount,
         postCount,
-        mediaKeys,
+        media,
         existingUserIds,
     })
+
+    console.log(`Borrowing ${media.length} distinct clips from existing posts.`)
 
     console.log(`Creating ${plan.users.length} accounts...`)
     const createdIds: string[] = []
@@ -188,6 +213,10 @@ const main = async () => {
         user_id: authorIds[post.authorIndex],
         text: post.text,
         video_url: post.videoUrl,
+        poster_key: post.posterKey,
+        duration_ms: post.durationMs,
+        width: post.width,
+        height: post.height,
         created_at: post.createdAt,
     }))
 
