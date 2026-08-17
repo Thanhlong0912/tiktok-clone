@@ -17,6 +17,7 @@ export const MEDIA_PREFIXES = {
   image: 'image',
   music: 'music',
   avatar: 'avatar',
+  caption: 'caption',
 } as const
 
 export type MediaKind = keyof typeof MEDIA_PREFIXES

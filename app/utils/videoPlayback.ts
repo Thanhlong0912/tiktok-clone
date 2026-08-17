@@ -41,12 +41,32 @@ const isRenderableVideo = (video: HTMLVideoElement) => {
 
 const getFiniteVideoTime = (time: number) => (Number.isFinite(time) && time > 0 ? time : 0)
 
+/**
+ * A video handed to the Floating Player is deliberately detached from where its
+ * card sits in the feed -- it has to keep playing while the viewer scrolls past
+ * it, opens another post or navigates away. Every pause helper below skips it,
+ * which is the whole reason the feature works.
+ */
+export const isFloatingVideo = (video: HTMLVideoElement | null): boolean => {
+  if (typeof document === 'undefined' || !video) {
+    return false
+  }
+
+  if (document.pictureInPictureElement === video) {
+    return true
+  }
+
+  // iOS Safari implements its own presentation-mode API instead.
+  const webkitVideo = video as HTMLVideoElement & { webkitPresentationMode?: string }
+  return webkitVideo.webkitPresentationMode === 'picture-in-picture'
+}
+
 export const pauseOtherVideos = (currentVideo: HTMLVideoElement | null, selector = 'video') => {
   if (typeof document === 'undefined' || !currentVideo) {
     return
   }
 
-  if (!isRenderableVideo(currentVideo)) {
+  if (!isRenderableVideo(currentVideo) && !isFloatingVideo(currentVideo)) {
     currentVideo.pause()
     return
   }
@@ -54,7 +74,7 @@ export const pauseOtherVideos = (currentVideo: HTMLVideoElement | null, selector
   const videos = document.querySelectorAll<HTMLVideoElement>(selector)
 
   videos.forEach((video) => {
-    if (video !== currentVideo && !video.paused) {
+    if (video !== currentVideo && !video.paused && !isFloatingVideo(video)) {
       video.pause()
     }
   })
@@ -66,7 +86,9 @@ export const pauseAllVideos = (selector = 'video') => {
   }
 
   document.querySelectorAll<HTMLVideoElement>(selector).forEach((video) => {
-    video.pause()
+    if (!isFloatingVideo(video)) {
+      video.pause()
+    }
   })
 }
 
@@ -75,7 +97,9 @@ export const pauseVideosDuringNavigation = (selector = 'video', durationMs = VID
     return
   }
 
-  const videos = Array.from(document.querySelectorAll<HTMLVideoElement>(selector))
+  const videos = Array.from(document.querySelectorAll<HTMLVideoElement>(selector)).filter(
+    (video) => !isFloatingVideo(video)
+  )
   if (videos.length < 1) {
     return
   }

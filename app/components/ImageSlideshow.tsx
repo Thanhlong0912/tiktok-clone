@@ -11,6 +11,11 @@ type ImageSlideshowProps = {
   audioId?: string
   audioUrl?: string
   muted?: boolean
+  /** 0..1, from videoVolumePreference. Ignored by iOS Safari. */
+  volume?: number
+  /** Playback speed: scales the audio rate AND how long a slide is held, so a
+   *  photo post obeys the Speed control the same way a video does. */
+  speed?: number
   className?: string
   imageClassName?: string
   altPrefix?: string
@@ -27,6 +32,8 @@ const ImageSlideshow = ({
   audioId = '',
   audioUrl = '',
   muted = false,
+  volume = 1,
+  speed = 1,
   className = '',
   imageClassName = '',
   altPrefix = 'Post image',
@@ -82,9 +89,10 @@ const ImageSlideshow = ({
       return
     }
 
-    const timer = window.setTimeout(advanceFromTimer, slideDurationMs)
+    const safeSpeed = speed > 0 ? speed : 1
+    const timer = window.setTimeout(advanceFromTimer, slideDurationMs / safeSpeed)
     return () => window.clearTimeout(timer)
-  }, [advanceFromTimer, autoPlay, slideDurationMs, slides.length])
+  }, [advanceFromTimer, autoPlay, slideDurationMs, slides.length, speed])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -94,6 +102,12 @@ const ImageSlideshow = ({
     }
 
     audio.muted = muted
+    audio.playbackRate = speed > 0 ? speed : 1
+    try {
+      audio.volume = Math.min(1, Math.max(0, volume))
+    } catch {
+      // Out of range is the only failure mode, and the value is clamped above.
+    }
 
     if (autoPlay) {
       audio.play().catch(() => {
@@ -106,7 +120,7 @@ const ImageSlideshow = ({
       audio.pause()
       audio.currentTime = 0
     }
-  }, [audioSrc, autoPlay, muted])
+  }, [audioSrc, autoPlay, muted, speed, volume])
 
   if (slides.length < 1) {
     return (

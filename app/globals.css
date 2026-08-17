@@ -195,3 +195,63 @@ body {
     transform: translateX(-50%);
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Volume slider                                                       */
+/*                                                                     */
+/* Always drawn over video, so it is explicitly light regardless of    */
+/* theme -- the same reasoning as the share sheet in PostMain.         */
+/* The filled portion is painted with a gradient driven by the inline  */
+/* --tt-volume-fill custom property VolumeControl sets on the input.   */
+/* ------------------------------------------------------------------ */
+.tt-volume-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    #ffffff 0%,
+    #ffffff var(--tt-volume-fill, 100%),
+    rgba(255, 255, 255, 0.3) var(--tt-volume-fill, 100%),
+    rgba(255, 255, 255, 0.3) 100%
+  );
+  cursor: pointer;
+  outline: none;
+}
+
+.tt-volume-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 13px;
+  width: 13px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
+
+.tt-volume-range::-moz-range-thumb {
+  height: 13px;
+  width: 13px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
+
+.tt-volume-range::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.tt-volume-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.45);
+}
+
+.tt-volume-range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.45);
+}

@@ -172,6 +172,12 @@ export interface PostMainCompTypes {
   onRemove?: (postId: string) => void
   /** Lifts counter/flag changes back into the feed store so they survive scroll. */
   onPostChange?: (postId: string, patch: Partial<PostWithProfile>) => void
+  /**
+   * Reports which post is in the floating player, or null. The feed keeps that
+   * card mounted regardless of the virtualization window -- unmounting the
+   * <video> closes the floating window.
+   */
+  onFloatingPlayerChange?: (postId: string | null) => void
 }
 
 export interface TextInputCompTypes {

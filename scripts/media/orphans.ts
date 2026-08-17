@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getS3Endpoint } from '@/libs/storage/config'
 import { parseArgs, parseMinAgeHours } from './args'
 import { fetchAllRows } from './fetchAllRows'
-import { buildReferencedKeys, type PostRow, type ProfileRow } from './references'
+import { buildReferencedKeys, type CaptionRow, type PostRow, type ProfileRow } from './references'
 import { planOrphans, type BucketObject } from './planOrphans'
 
 const HOUR_MS = 60 * 60 * 1000
@@ -86,10 +86,12 @@ const main = async () => {
     // separate LIMIT/OFFSET queries -- without it a row written between two
     // page reads can shift past a window already read and never be returned,
     // leaving its media unreferenced and, once past --min-age, deletable.
-    const [posts, profiles] = await Promise.all([
+    const [posts, profiles, captions] = await Promise.all([
         fetchAllRows<PostRow>((from, to) =>
             db.from('posts')
-                .select('video_url')
+                // poster_key is a separate column from video_url and its objects
+                // are just as live -- see buildReferencedKeys.
+                .select('video_url, poster_key')
                 .order('id', { ascending: true })
                 .range(from, to)
         ),
@@ -99,10 +101,19 @@ const main = async () => {
                 .order('id', { ascending: true })
                 .range(from, to)
         ),
+        fetchAllRows<CaptionRow>((from, to) =>
+            db.from('post_captions')
+                .select('storage_key')
+                .order('id', { ascending: true })
+                .range(from, to)
+        ),
     ])
 
-    const referenced = buildReferencedKeys(posts, profiles, placeholder)
-    console.log(`Rows read: ${posts.length} posts, ${profiles.length} profiles.`)
+    const referenced = buildReferencedKeys(posts, profiles, placeholder, captions)
+    console.log(
+        `Rows read: ${posts.length} posts, ${profiles.length} profiles, ` +
+        `${captions.length} caption tracks.`
+    )
     console.log(`Referenced by the database: ${referenced.size} keys.`)
     console.log(`Protected placeholder key: ${placeholder}`)
 
