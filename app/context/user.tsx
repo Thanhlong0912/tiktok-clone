@@ -11,6 +11,10 @@ const UserContext = createContext<UserContextTypes | null>(null);
 const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null);
+  // Starts true: on the very first render nobody knows yet whether there is a
+  // session. Only ever flipped to false, so a later auth change cannot make a
+  // gated page flash its loading state again.
+  const [isCheckingUser, setIsCheckingUser] = useState<boolean>(true);
 
   const checkUser = async () => {
     try {
@@ -30,6 +34,8 @@ const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
       });
     } catch (error) {
       setUser(null);
+    } finally {
+      setIsCheckingUser(false)
     }
   };
 
@@ -94,7 +100,7 @@ const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   };
 
   return (
-      <UserContext.Provider value={{ user, register, login, logout, checkUser }}>
+      <UserContext.Provider value={{ user, isCheckingUser, register, login, logout, checkUser }}>
           {children}
       </UserContext.Provider>
   );
