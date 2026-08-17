@@ -9,25 +9,6 @@ const config: Config = {
   darkMode: 'class',
   theme: {
     extend: {
-      /**
-       * Tailwind's default opacity scale jumps 10 → 20 → 25 → 30 → 40 → 50, so
-       * `bg-black/45`, `bg-black/55` and friends generated NO rule at all and
-       * the overlay chrome that asked for them -- the sound pill, the options
-       * button, the mobile action rail, toasts, the bottom nav -- rendered with
-       * a fully transparent background over the video.
-       *
-       * Purely additive: every value here is one Tailwind does not emit today,
-       * so no existing rule changes. It only makes the classes already written
-       * across the app do what they say.
-       */
-      opacity: {
-        15: '0.15',
-        35: '0.35',
-        45: '0.45',
-        55: '0.55',
-        65: '0.65',
-        85: '0.85',
-      },
       screens: {
         xs: '480px',
       },

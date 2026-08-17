@@ -148,7 +148,10 @@ const VolumeControl = ({
           scheduleClose()
         }
       }}
-      className={`z-30 flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1.5 text-white ${className}`}
+      // Opacity steps must come from Tailwind's default scale (…40, 50, 60…):
+      // an off-scale value like /55 generates no rule at all and the pill ends
+      // up fully transparent over the video.
+      className={`z-30 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-white ${className}`}
     >
       <button
         type="button"

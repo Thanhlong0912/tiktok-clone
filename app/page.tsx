@@ -443,7 +443,7 @@ export default function Home() {
               onClick={() => scrollFeedByOneCard('up')}
               disabled={isFeedAtTop}
               aria-label="Previous video"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white transition-colors hover:bg-black/65 disabled:cursor-not-allowed disabled:opacity-30 dark:bg-white/15 dark:hover:bg-white/25"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-30 dark:bg-white/20 dark:hover:bg-white/25"
             >
               <BsChevronUp size={17} />
             </button>
@@ -451,7 +451,7 @@ export default function Home() {
               onClick={() => scrollFeedByOneCard('down')}
               disabled={isFeedAtEnd}
               aria-label="Next video"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white transition-colors hover:bg-black/65 disabled:cursor-not-allowed disabled:opacity-30 dark:bg-white/15 dark:hover:bg-white/25"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-30 dark:bg-white/20 dark:hover:bg-white/25"
             >
               <BsChevronDown size={17} />
             </button>
