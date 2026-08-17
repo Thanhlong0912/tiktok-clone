@@ -85,7 +85,12 @@ const TopNav = () => {
   }, 500), [])
 
   const goTo = () => {
-    if (!userContext?.user) return setIsLoginOpen(true)
+    // `user` is null both before and after the auth check settles, so
+    // prompting on null alone showed the login overlay to a signed-in visitor
+    // who clicked Upload in the moment before their session loaded. While the
+    // check is still in flight, route and let the upload page's own guard
+    // decide -- it waits for the same flag.
+    if (!userContext?.user && !userContext?.isCheckingUser) return setIsLoginOpen(true)
     router.push('/upload')
   }
 

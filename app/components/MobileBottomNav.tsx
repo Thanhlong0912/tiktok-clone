@@ -18,15 +18,34 @@ interface MobileBottomNavProps {
 const MobileBottomNav = ({ variant = 'solid' }: MobileBottomNavProps) => {
   const router = useRouter()
   const pathname = usePathname()
-  const { user } = useUser() || {}
+  const { user, isCheckingUser } = useUser() || {}
   const { setIsLoginOpen } = useGeneralStore()
 
+  /**
+   * Same race as TopNav's Upload button: `user` is null before the auth check
+   * settles as well as after it, so a tap landing in that window prompted a
+   * signed-in visitor to log in.
+   *
+   * Only safe for a fixed target. `/profile/${user?.id}` cannot be built until
+   * the check resolves -- routing early would navigate to /profile/undefined.
+   */
   const requireAuth = (target: string) => {
     if (!user?.id) {
-      setIsLoginOpen(true)
+      // Mid-check there is nothing to prompt about yet and no id to route
+      // with, so the tap is ignored rather than guessing wrong.
+      if (!isCheckingUser) setIsLoginOpen(true)
       return
     }
     router.push(target)
+  }
+
+  /** The upload page waits for the same flag, so it can settle this itself. */
+  const goToUpload = () => {
+    if (!user?.id && !isCheckingUser) {
+      setIsLoginOpen(true)
+      return
+    }
+    router.push('/upload')
   }
 
   const [unreadCount, setUnreadCount] = useState<number>(0)
@@ -77,7 +96,7 @@ const MobileBottomNav = ({ variant = 'solid' }: MobileBottomNavProps) => {
         />
 
         <button
-          onClick={() => requireAuth('/upload')}
+          onClick={() => goToUpload()}
           className="flex justify-center pb-1"
           aria-label="Upload"
         >
