@@ -55,9 +55,16 @@ const Upload = () => {
     const [coverIndex, setCoverIndex] = useState<number>(0);
     const [isPreparingCover, setIsPreparingCover] = useState<boolean>(false);
 
+    // Waits for the auth check to settle. `user` is null both before and after
+    // it, so redirecting on null alone bounced a signed-in visitor straight
+    // back to the feed whenever /upload was opened directly -- a deep link, a
+    // bookmark or a hard refresh -- because the session had not loaded yet.
+    const isCheckingUser = contextUser?.isCheckingUser ?? true
+
     useEffect(() => {
+        if (isCheckingUser) return
         if (!contextUser?.user) router.push('/')
-    }, [contextUser, router])
+    }, [contextUser, isCheckingUser, router])
 
     useEffect(() => {
         return () => {
@@ -364,6 +371,19 @@ const Upload = () => {
     const modeSubtitle = uploadMode === 'video'
         ? 'Post a video to your account'
         : 'Post 1 to 10 images in show mode'
+
+  // Held back rather than rendered behind the redirect: a logged-out visitor
+  // used to be bounced before the form ever painted, and that should not
+  // regress into a flash of the composer now that the redirect waits.
+  if (isCheckingUser) {
+    return (
+      <UploadLayout>
+        <div className="flex w-full items-center justify-center py-24">
+          <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-tiktok" />
+        </div>
+      </UploadLayout>
+    )
+  }
 
   return (
     <>

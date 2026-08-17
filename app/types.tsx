@@ -1,5 +1,12 @@
 export interface UserContextTypes {
   user: User | null;
+  /**
+   * True until the first auth check settles. `user` is null both before and
+   * after that check, so anything that acts on "logged out" -- a redirect, a
+   * login prompt -- has to wait for this to be false or it fires against a
+   * signed-in visitor whose session simply has not loaded yet.
+   */
+  isCheckingUser: boolean;
   register: (name: string, email: string, password: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
