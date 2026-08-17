@@ -4,6 +4,7 @@ import { useUser } from "@/app/context/user"
 import { useGeneralStore } from "@/app/stores/general"
 import { usePostStore } from "@/app/stores/post"
 import { TouchEvent, UIEvent, useCallback, useEffect, useRef, useState } from "react"
+import { BsChevronDown, BsChevronUp } from "react-icons/bs"
 import ClientOnly from "./components/ClientOnly"
 import PostMain from "./components/PostMain"
 import PostSkeleton from "./components/PostSkeleton"
@@ -25,6 +26,11 @@ export default function Home() {
   const [mobileViewportHeight, setMobileViewportHeight] = useState<number>(0)
   const [mobileVisibleIndex, setMobileVisibleIndex] = useState<number>(0)
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState<boolean>(false)
+  const [isFeedAtTop, setIsFeedAtTop] = useState<boolean>(true)
+  const [isFeedAtEnd, setIsFeedAtEnd] = useState<boolean>(false)
+  // Whichever post is in the floating player stays mounted regardless of the
+  // virtualization window -- unmounting its <video> closes the floating window.
+  const [floatingPostId, setFloatingPostId] = useState<string | null>(null)
   const isAutoScrollEnabledRef = useRef<boolean>(false)
   const touchStartXRef = useRef<number | null>(null)
   const touchStartYRef = useRef<number | null>(null)
@@ -101,24 +107,38 @@ export default function Home() {
     })
   }, [])
 
+  /**
+   * One card up or down.
+   *
+   * behavior:'auto', not 'smooth'. Chromium cancels a smooth programmatic
+   * scroll inside a `scroll-snap-type: mandatory` container and snaps back to
+   * where it started, so both the keyboard and the arrow buttons would appear
+   * to do nothing.
+   */
+  const scrollFeedByOneCard = useCallback((direction: 'up' | 'down') => {
+    const container = feedContainerRef.current
+    if (!container) return
+
+    container.scrollBy({
+      top: direction === 'down' ? container.clientHeight : -container.clientHeight,
+      behavior: 'auto',
+    })
+  }, [])
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const container = feedContainerRef.current
-      if (!container) return
+      if (!feedContainerRef.current) return
 
       const target = event.target as HTMLElement | null
       const tag = target?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return
 
-      // behavior:'auto', not 'smooth'. Chromium cancels a smooth programmatic
-      // scroll inside a `scroll-snap-type: mandatory` container and snaps back
-      // to where it started, so keyboard navigation silently did nothing.
       if (event.key === 'ArrowDown' || event.key === 'j') {
         event.preventDefault()
-        container.scrollBy({ top: container.clientHeight, behavior: 'auto' })
+        scrollFeedByOneCard('down')
       } else if (event.key === 'ArrowUp' || event.key === 'k') {
         event.preventDefault()
-        container.scrollBy({ top: -container.clientHeight, behavior: 'auto' })
+        scrollFeedByOneCard('up')
       } else if (event.key === 'm') {
         event.preventDefault()
         setVideoSoundEnabled(!getVideoSoundEnabled())
@@ -127,7 +147,7 @@ export default function Home() {
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [scrollFeedByOneCard])
 
   const saveTabPosition = useCallback((tab: MobileFeedTab) => {
     const feedElement = feedContainerRef.current
@@ -248,6 +268,10 @@ export default function Home() {
       void loadMorePosts()
     }
 
+    // A couple of pixels of slack: snap scrolling rarely lands on exactly 0.
+    setIsFeedAtTop(container.scrollTop <= 2)
+    setIsFeedAtEnd(remaining <= 2)
+
     if (!shouldVirtualize) {
       return
     }
@@ -363,7 +387,7 @@ export default function Home() {
             ) : (
               <>
                 {displayedPosts.map((post, index) =>
-                  index >= windowStart && index <= windowEnd ? (
+                  (index >= windowStart && index <= windowEnd) || post.id === floatingPostId ? (
                     <PostMain
                       post={post}
                       key={post.id}
@@ -373,6 +397,7 @@ export default function Home() {
                       onAutoScrollChange={handleAutoScrollChange}
                       onRemove={removePost}
                       onPostChange={patchPost}
+                      onFloatingPlayerChange={setFloatingPostId}
                     />
                   ) : (
                     <div
@@ -407,6 +432,31 @@ export default function Home() {
             )}
           </ClientOnly>
         </div>
+
+        {/*
+          Desktop only. On mobile the whole card is a swipe target and TikTok
+          shows no arrows there either.
+        */}
+        {displayedPosts.length > 1 ? (
+          <div className="fixed right-5 top-1/2 z-30 hidden -translate-y-1/2 flex-col gap-3 md:flex">
+            <button
+              onClick={() => scrollFeedByOneCard('up')}
+              disabled={isFeedAtTop}
+              aria-label="Previous video"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white transition-colors hover:bg-black/65 disabled:cursor-not-allowed disabled:opacity-30 dark:bg-white/15 dark:hover:bg-white/25"
+            >
+              <BsChevronUp size={17} />
+            </button>
+            <button
+              onClick={() => scrollFeedByOneCard('down')}
+              disabled={isFeedAtEnd}
+              aria-label="Next video"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white transition-colors hover:bg-black/65 disabled:cursor-not-allowed disabled:opacity-30 dark:bg-white/15 dark:hover:bg-white/25"
+            >
+              <BsChevronDown size={17} />
+            </button>
+          </div>
+        ) : null}
       </MainLayout>
     </>
   )

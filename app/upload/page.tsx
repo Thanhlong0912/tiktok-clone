@@ -5,6 +5,7 @@ import React, { useEffect, useState } from 'react'
 import { AiOutlineCheckCircle } from "react-icons/ai"
 import { BiImageAdd, BiLoaderCircle, BiSolidCloudUpload, BiVideoPlus } from "react-icons/bi"
 import { ImMusic } from "react-icons/im"
+import { MdOutlineClosedCaption } from "react-icons/md"
 import { PiKnifeLight } from 'react-icons/pi'
 import ImageSlideshow from '../components/ImageSlideshow'
 import CaptionComposer from '../components/upload/CaptionComposer'
@@ -13,6 +14,12 @@ import useCreatePost from '../hooks/useCreatePost'
 import UploadLayout from '../layouts/UploadLayout'
 import { UploadError } from '../types'
 import { MAX_IMAGE_UPLOAD_COUNT, UploadPostMedia } from '../utils/postMedia'
+import {
+    hasVttExtension,
+    isWebVtt,
+    MAX_CAPTION_FILE_BYTES,
+    MAX_CAPTION_FILE_LABEL,
+} from '../utils/captionFile'
 import { showToast } from '../utils/toast'
 import { captureVideoFrame, readVideoMetadata, type VideoMetadata } from '../utils/posterFrame'
 
@@ -38,6 +45,7 @@ const Upload = () => {
     let [imageFiles, setImageFiles] = useState<File[]>([]);
     let [audioFile, setAudioFile] = useState<File | null>(null);
     let [audioDisplay, setAudioDisplay] = useState<string>('');
+    const [captionsFile, setCaptionsFile] = useState<File | null>(null);
     let [error, setError] = useState<UploadError | null>(null);
     let [isUploading, setIsUploading] = useState<boolean>(false);
     let [uploadProgress, setUploadProgress] = useState<number>(0);
@@ -221,6 +229,41 @@ const Upload = () => {
         event.target.value = ''
     }
 
+    /**
+     * Subtitles are checked by content, not just by name: an .srt renamed to
+     * .vtt uploads fine and then renders zero cues, which is impossible for the
+     * creator to diagnose after the fact.
+     */
+    const onCaptionsChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const files = event.target.files
+
+        if (!files || files.length < 1) {
+            event.target.value = ''
+            return
+        }
+
+        const file = files[0]
+        event.target.value = ''
+
+        if (!hasVttExtension(file.name)) {
+            setError({ type: 'File', message: 'Subtitles must be a WebVTT (.vtt) file' })
+            return
+        }
+
+        if (file.size > MAX_CAPTION_FILE_BYTES) {
+            setError({ type: 'File', message: `Subtitles must be smaller than ${MAX_CAPTION_FILE_LABEL}` })
+            return
+        }
+
+        if (!isWebVtt(await file.text())) {
+            setError({ type: 'File', message: 'That file does not start with WEBVTT. Convert it to WebVTT first.' })
+            return
+        }
+
+        setCaptionsFile(file)
+        setError(null)
+    }
+
     const discard = () => {
         setVideoDisplay('')
         setVideoFile(null)
@@ -228,6 +271,7 @@ const Upload = () => {
         setImageFiles([])
         setAudioFile(null)
         setAudioDisplay('')
+        setCaptionsFile(null)
         setCaption('')
         setError(null)
     }
@@ -286,11 +330,25 @@ const Upload = () => {
         setUploadProgress(0)
 
         try {
-            await useCreatePost(media, contextUser?.user?.id, caption.trim(), setUploadProgress, {
-                poster: uploadMode === 'video' ? coverOptions[coverIndex]?.file ?? null : null,
-                metadata: uploadMode === 'video' ? videoMeta : null,
-            })
-            showToast('Your post is live!')
+            const { captionsAttached } = await useCreatePost(
+                media,
+                contextUser?.user?.id,
+                caption.trim(),
+                setUploadProgress,
+                {
+                    poster: uploadMode === 'video' ? coverOptions[coverIndex]?.file ?? null : null,
+                    metadata: uploadMode === 'video' ? videoMeta : null,
+                    captions: uploadMode === 'video' ? captionsFile : null,
+                }
+            )
+            // The post is live either way -- only the subtitle attach can fail
+            // on its own, and that must not read as a failed upload.
+            showToast(
+                captionsAttached
+                    ? 'Your post is live!'
+                    : 'Your post is live, but the subtitles could not be attached.',
+                captionsAttached ? 'success' : 'error'
+            )
             router.push(`/profile/${contextUser?.user?.id}`)
         } catch (error) {
             console.error(error)
@@ -653,6 +711,44 @@ const Upload = () => {
                                     onChange={onAudioChange}
                                     hidden
                                     accept="audio/*,.mp3"
+                                />
+                            </div>
+                        ) : null}
+
+                        {uploadMode === 'video' ? (
+                            <div className="mt-5">
+                                <div className="mb-1 text-[15px] text-ink">Subtitles</div>
+                                {captionsFile ? (
+                                    <div className="flex items-center justify-between rounded-md border border-line p-2.5">
+                                        <div className="flex min-w-0 items-center gap-2">
+                                            <MdOutlineClosedCaption className="min-w-[18px] text-tiktok" size="18" />
+                                            <span className="truncate text-[13px] text-ink">{captionsFile.name}</span>
+                                        </div>
+                                        <button
+                                            onClick={() => setCaptionsFile(null)}
+                                            className="ml-2 text-[13px] font-semibold text-tiktok"
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <label
+                                        htmlFor="captionsInput"
+                                        className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-line p-2.5 text-[13px] text-ink-soft hover:bg-surface-subtle"
+                                    >
+                                        <MdOutlineClosedCaption size="18" />
+                                        Add subtitles (WebVTT .vtt) — optional
+                                    </label>
+                                )}
+                                <p className="mt-1 text-[12px] text-ink-soft">
+                                    Viewers can switch these on from the video options menu.
+                                </p>
+                                <input
+                                    type="file"
+                                    id="captionsInput"
+                                    onChange={onCaptionsChange}
+                                    hidden
+                                    accept=".vtt,text/vtt"
                                 />
                             </div>
                         ) : null}

@@ -47,6 +47,39 @@ describe('buildReferencedKeys', () => {
         expect(referenced.has('placeholder-avatar.png')).toBe(true)
     })
 
+    it('includes cover frames, which live in their own column', () => {
+        // Without this, a --delete run strips the poster off every older post.
+        const referenced = buildReferencedKeys(
+            [{ video_url: 'video1', poster_key: 'image/poster1' }],
+            [{ image: 'avatar1' }],
+            'placeholder-avatar.png'
+        )
+
+        expect(referenced.has('image/poster1')).toBe(true)
+    })
+
+    it('includes subtitle tracks', () => {
+        const referenced = buildReferencedKeys(
+            [{ video_url: 'video1' }],
+            [{ image: 'avatar1' }],
+            'placeholder-avatar.png',
+            [{ storage_key: 'caption/vtt1' }]
+        )
+
+        expect(referenced.has('caption/vtt1')).toBe(true)
+    })
+
+    it('tolerates an empty caption table', () => {
+        const referenced = buildReferencedKeys(
+            [{ video_url: 'video1' }],
+            [{ image: 'avatar1' }],
+            'placeholder-avatar.png',
+            []
+        )
+
+        expect(referenced.has('video1')).toBe(true)
+    })
+
     it('tolerates null media values', () => {
         const referenced = buildReferencedKeys(
             [{ video_url: null }],

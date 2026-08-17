@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AiFillHeart, AiOutlineRetweet } from 'react-icons/ai'
 import { BiLoaderCircle } from 'react-icons/bi'
-import { BsFillPlayFill, BsBookmark, BsBookmarkFill, BsTrash3, BsVolumeMuteFill, BsVolumeUpFill } from 'react-icons/bs'
+import { BsFillPlayFill, BsBookmark, BsBookmarkFill, BsTrash3 } from 'react-icons/bs'
 import { FaCommentDots, FaRegCopy, FaShare } from 'react-icons/fa'
 import { FiShare } from 'react-icons/fi'
 import { ImMusic } from 'react-icons/im'
@@ -26,12 +26,20 @@ import useGetCommentsByPostId from '../hooks/useGetCommentsByPostId'
 import useIsFollowing from '../hooks/useIsFollowing'
 import { useGeneralStore } from '../stores/general'
 import { CommentWithProfile, PostMainCompTypes } from '../types'
-import { pauseOtherVideos, pauseVideosDuringNavigation, rememberVideoPlayback } from '../utils/videoPlayback'
-import { getVideoSoundEnabled, setVideoSoundEnabled, subscribeToVideoSoundPreference } from '../utils/videoSoundPreference'
+import { isFloatingVideo, pauseOtherVideos, pauseVideosDuringNavigation, rememberVideoPlayback } from '../utils/videoPlayback'
 import { getImagePostAudioId, getImagePostIds, isImagePost } from '../utils/postMedia'
+import { resolutionLabel } from '../utils/videoQuality'
+import { createCaptionObjectUrl, fetchPostCaptions } from '../utils/captions'
+import {
+  getVideoCaptionsEnabled,
+  setVideoCaptionsEnabled,
+  subscribeToVideoCaptionsPreference,
+} from '../utils/videoCaptionsPreference'
+import useVideoPlayerPreferences from '../hooks/useVideoPlayerPreferences'
 import CaptionText from './CaptionText'
 import ImageSlideshow from './ImageSlideshow'
-import VideoOptionsMenu from './VideoOptionsMenu'
+import VideoOptionsMenu, { type CaptionsState } from './VideoOptionsMenu'
+import VolumeControl from './VolumeControl'
 
 /**
  * A single feed card.
@@ -63,6 +71,7 @@ const PostMain = ({
   onAutoScrollChange,
   onRemove,
   onPostChange,
+  onFloatingPlayerChange,
 }: PostMainCompTypes) => {
   const { user } = useUser() || {}
   const { setIsLoginOpen } = useGeneralStore()
@@ -106,10 +115,18 @@ const PostMain = ({
   const [isShareSheetOpen, setIsShareSheetOpen] = useState<boolean>(false)
   const [canNativeShare, setCanNativeShare] = useState<boolean>(false)
   const [videoPreloadMode, setVideoPreloadMode] = useState<'metadata' | 'auto'>('metadata')
-  const [isSoundEnabled, setIsSoundEnabledState] = useState<boolean>(false)
   const [isMediaActive, setIsMediaActive] = useState<boolean>(false)
   const [videoProgress, setVideoProgress] = useState<number>(0)
   const [mediaFailed, setMediaFailed] = useState<boolean>(false)
+
+  const [isFloatingPlayerSupported, setIsFloatingPlayerSupported] = useState<boolean>(false)
+  const [isFloatingPlayerActive, setIsFloatingPlayerActive] = useState<boolean>(false)
+  const [captionsState, setCaptionsState] = useState<CaptionsState>('unknown')
+  const [captionTrackUrl, setCaptionTrackUrl] = useState<string>('')
+  const [isCaptionsEnabled, setIsCaptionsEnabled] = useState<boolean>(false)
+
+  // muted / volume / playbackRate, shared with the detail page's two players.
+  const { isSoundEnabled, volume, speed, applyPreferences } = useVideoPlayerPreferences(videoRef)
 
   const postIsImage = isImagePost(post.video_url)
   const postImageIds = useMemo(() => getImagePostIds(post.video_url), [post.video_url])
@@ -262,6 +279,14 @@ const PostMain = ({
             })
         } else {
           setIsMediaActive(false)
+
+          // The floating player exists precisely so this video survives being
+          // scrolled past: pausing it here would close the feature the moment
+          // it was used. Its watch session keeps running for the same reason.
+          if (isFloatingVideo(videoRef.current)) {
+            return
+          }
+
           videoRef.current?.pause()
           setIsVideoPaused(true)
           // Scrolled away: report what was actually watched.
@@ -320,27 +345,111 @@ const PostMain = ({
     setIsVideoPaused(true)
   }, [])
 
-  const syncSoundState = useCallback((enabled: boolean) => {
-    setIsSoundEnabledState(enabled)
-    if (videoRef.current) {
-      videoRef.current.muted = !enabled
+  /** Unmuting is a user gesture, so it is also the moment a video that autoplay
+   *  refused to start can finally be played. */
+  const resumeAfterUnmute = useCallback(() => {
+    videoRef.current?.play().catch(() => null)
+  }, [])
+
+  // ---------------------------------------------------------- floating player
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+
+    const video = videoRef.current
+    setIsFloatingPlayerSupported(
+      Boolean(document.pictureInPictureEnabled) && !video?.disablePictureInPicture
+    )
+  }, [postIsImage])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    // The feed virtualizes to a 5-card window, and unmounting this element
+    // would tear the floating window down with it -- so the feed is told which
+    // post is floating and keeps that one card mounted.
+    const onEnter = () => {
+      setIsFloatingPlayerActive(true)
+      onFloatingPlayerChange?.(post.id)
+    }
+    const onLeave = () => {
+      setIsFloatingPlayerActive(false)
+      onFloatingPlayerChange?.(null)
+    }
+
+    video.addEventListener('enterpictureinpicture', onEnter)
+    video.addEventListener('leavepictureinpicture', onLeave)
+
+    return () => {
+      video.removeEventListener('enterpictureinpicture', onEnter)
+      video.removeEventListener('leavepictureinpicture', onLeave)
+    }
+  }, [onFloatingPlayerChange, post.id, postIsImage])
+
+  const toggleFloatingPlayer = useCallback(async () => {
+    const video = videoRef.current
+    if (!video || typeof document === 'undefined') return
+
+    try {
+      if (document.pictureInPictureElement === video) {
+        await document.exitPictureInPicture()
+        return
+      }
+
+      await video.requestPictureInPicture()
+    } catch (error) {
+      console.error(error)
+      showToast('Could not open the floating player', 'error')
     }
   }, [])
 
-  const toggleSound = useCallback(() => {
-    const enabled = !isSoundEnabled
-    setVideoSoundEnabled(enabled)
-    syncSoundState(enabled)
-
-    if (enabled) {
-      videoRef.current?.play().catch(() => null)
-    }
-  }, [isSoundEnabled, syncSoundState])
+  // ----------------------------------------------------------------- captions
 
   useEffect(() => {
-    syncSoundState(getVideoSoundEnabled())
-    return subscribeToVideoSoundPreference((enabled) => syncSoundState(enabled))
-  }, [syncSoundState])
+    setIsCaptionsEnabled(getVideoCaptionsEnabled())
+    return subscribeToVideoCaptionsPreference(setIsCaptionsEnabled)
+  }, [])
+
+  /**
+   * One query per post per session, cached in app/utils/captions.ts. Triggered
+   * by opening the menu or by a card going active while captions are already
+   * on -- never for every card of every page.
+   */
+  const loadCaptions = useCallback(async () => {
+    if (postIsImage || captionsState !== 'unknown') return
+
+    try {
+      const captions = await fetchPostCaptions(post.id)
+      if (captions.length < 1) {
+        setCaptionsState('none')
+        return
+      }
+
+      setCaptionsState('available')
+      setCaptionTrackUrl(await createCaptionObjectUrl(captions[0].storage_key))
+    } catch (error) {
+      console.error(error)
+      setCaptionsState('none')
+    }
+  }, [captionsState, post.id, postIsImage])
+
+  useEffect(() => {
+    if (isCaptionsEnabled && isMediaActive) void loadCaptions()
+  }, [isCaptionsEnabled, isMediaActive, loadCaptions])
+
+  // The blob is this component's to release -- see createCaptionObjectUrl.
+  useEffect(() => {
+    if (!captionTrackUrl) return
+    return () => URL.revokeObjectURL(captionTrackUrl)
+  }, [captionTrackUrl])
+
+  useEffect(() => {
+    const track = videoRef.current?.textTracks?.[0]
+    if (!track) return
+
+    track.mode = isCaptionsEnabled ? 'showing' : 'hidden'
+  }, [captionTrackUrl, isCaptionsEnabled])
 
   useEffect(() => {
     const postId = post.id
@@ -718,6 +827,8 @@ const PostMain = ({
                   imageIds={postImageIds}
                   audioId={postAudioId}
                   muted={!isSoundEnabled}
+                  volume={volume}
+                  speed={speed}
                   autoPlay={isMediaActive}
                   onCycleComplete={() => onVideoEnded(post.id)}
                   className="h-full w-full"
@@ -746,6 +857,9 @@ const PostMain = ({
                     onVideoEnded(post.id)
                   }}
                   onTimeUpdate={handleVideoProgress}
+                  // A fresh src resets playbackRate to defaultPlaybackRate in
+                  // several browsers, which silently dropped the chosen speed.
+                  onLoadedMetadata={applyPreferences}
                   onPlay={() => {
                     pauseOtherVideos(videoRef.current)
                     setIsVideoPaused(false)
@@ -754,7 +868,11 @@ const PostMain = ({
                   onError={() => setMediaFailed(true)}
                   onClick={handleMobileVideoTap}
                   onDoubleClick={handleDoubleTapLike}
-                />
+                >
+                  {captionTrackUrl ? (
+                    <track kind="captions" srcLang="en" label="Captions" src={captionTrackUrl} default />
+                  ) : null}
+                </video>
 
                 {mediaFailed ? (
                   <div className="absolute inset-0 flex items-center justify-center bg-black px-8 text-center text-sm text-white/80">
@@ -781,19 +899,12 @@ const PostMain = ({
             ) : null}
 
             {!postIsImage || hasImageAudio ? (
-              <button
-                onClick={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  toggleSound()
-                }}
-                aria-label={isSoundEnabled ? 'Mute video' : 'Unmute video'}
-                aria-pressed={isSoundEnabled}
-                className="absolute left-4 top-[calc(env(safe-area-inset-top)+16px)] z-30 flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1.5 text-xs font-semibold text-white md:left-3 md:top-3"
-              >
-                {isSoundEnabled ? <BsVolumeUpFill size={16} /> : <BsVolumeMuteFill size={16} />}
-                {!isSoundEnabled ? 'Tap for sound' : null}
-              </button>
+              <VolumeControl
+                isSoundEnabled={isSoundEnabled}
+                volume={volume}
+                onUnmute={postIsImage ? undefined : resumeAfterUnmute}
+                className="absolute left-4 top-[calc(env(safe-area-inset-top)+16px)] md:left-3 md:top-3"
+              />
             ) : null}
 
             <VideoOptionsMenu
@@ -803,6 +914,17 @@ const PostMain = ({
               postUserId={post.profile.user_id}
               onGoToPost={openPostDetail}
               onNotInterested={onRemove}
+              mediaKind={postIsImage ? 'image' : 'video'}
+              qualityLabel={resolutionLabel(post.width, post.height)}
+              isFloatingPlayerSupported={isFloatingPlayerSupported}
+              isFloatingPlayerActive={isFloatingPlayerActive}
+              onToggleFloatingPlayer={toggleFloatingPlayer}
+              captionsState={captionsState}
+              isCaptionsEnabled={isCaptionsEnabled}
+              onCaptionsChange={setVideoCaptionsEnabled}
+              onOpenChange={(menuIsOpen) => {
+                if (menuIsOpen) void loadCaptions()
+              }}
               className="absolute right-4 top-[calc(env(safe-area-inset-top)+16px)] md:right-3 md:top-3"
             />
 

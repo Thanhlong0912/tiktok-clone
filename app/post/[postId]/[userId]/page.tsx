@@ -4,8 +4,17 @@ import ClientOnly from '@/app/components/ClientOnly'
 import ImageSlideshow from '@/app/components/ImageSlideshow'
 import Comments from '@/app/components/post/Comments'
 import CommentsHeader from '@/app/components/post/CommentsHeader'
-import VideoOptionsMenu from '@/app/components/VideoOptionsMenu'
+import VideoOptionsMenu, { type CaptionsState } from '@/app/components/VideoOptionsMenu'
+import VolumeControl from '@/app/components/VolumeControl'
 import useCreateBucketUrl from '@/app/hooks/useCreateBucketUrl'
+import useVideoPlayerPreferences from '@/app/hooks/useVideoPlayerPreferences'
+import { createCaptionObjectUrl, fetchPostCaptions } from '@/app/utils/captions'
+import { resolutionLabel } from '@/app/utils/videoQuality'
+import {
+  getVideoCaptionsEnabled,
+  setVideoCaptionsEnabled,
+  subscribeToVideoCaptionsPreference,
+} from '@/app/utils/videoCaptionsPreference'
 import { useCommentStore } from '@/app/stores/comment'
 import { usePostStore } from '@/app/stores/post'
 import { PostPageTypes } from '@/app/types'
@@ -22,12 +31,11 @@ import {
   pauseVideosDuringNavigation,
   type VideoPlaybackSnapshot,
 } from '@/app/utils/videoPlayback'
-import { getVideoSoundEnabled, setVideoSoundEnabled, subscribeToVideoSoundPreference } from '@/app/utils/videoSoundPreference'
+import { setVideoSoundEnabled } from '@/app/utils/videoSoundPreference'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AiOutlineClose } from 'react-icons/ai'
 import { BiChevronDown, BiChevronUp } from 'react-icons/bi'
-import { BsVolumeMuteFill, BsVolumeUpFill } from 'react-icons/bs'
 
 const Post = ({ params }: PostPageTypes) => {
   const { postById, postsByUser, setPostById, setPostsByUser } = usePostStore()
@@ -36,8 +44,12 @@ const Post = ({ params }: PostPageTypes) => {
   const [isMobileSheetExpanded, setIsMobileSheetExpanded] = useState<boolean>(false)
   const [isSheetDragging, setIsSheetDragging] = useState<boolean>(false)
   const [sheetDragOffsetY, setSheetDragOffsetY] = useState<number>(0)
-  const [isSoundEnabled, setIsSoundEnabledState] = useState<boolean>(false)
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState<boolean>(false)
+  const [captionsState, setCaptionsState] = useState<CaptionsState>('unknown')
+  const [captionTrackUrl, setCaptionTrackUrl] = useState<string>('')
+  const [isCaptionsEnabled, setIsCaptionsEnabled] = useState<boolean>(false)
+  const [isFloatingPlayerSupported, setIsFloatingPlayerSupported] = useState<boolean>(false)
+  const [isFloatingPlayerActive, setIsFloatingPlayerActive] = useState<boolean>(false)
   const [isDesktopViewport, setIsDesktopViewport] = useState<boolean | null>(null)
   const [videoAspectRatio, setVideoAspectRatio] = useState<number | null>(null)
   const sheetDragStartYRef = useRef<number | null>(null)
@@ -87,6 +99,13 @@ const Post = ({ params }: PostPageTypes) => {
     [params.postId, postsByUser]
   )
 
+  // Declared here rather than beside the render: the captions and floating
+  // player callbacks below close over postIsImage.
+  const postIsImage = isImagePost(postById?.video_url)
+  const postImageIds = getImagePostIds(postById?.video_url)
+  const postAudioId = getImagePostAudioId(postById?.video_url)
+  const hasImageAudio = postIsImage && Boolean(postAudioId)
+
   const pauseCurrentVideos = useCallback((lockDuringNavigation = false) => {
     if (lockDuringNavigation) {
       pauseVideosDuringNavigation()
@@ -96,17 +115,11 @@ const Post = ({ params }: PostPageTypes) => {
     desktopVideoRef.current?.pause()
   }, [])
 
-  const syncSoundState = useCallback((enabled: boolean) => {
-    setIsSoundEnabledState(enabled)
-
-    if (mobileVideoRef.current) {
-      mobileVideoRef.current.muted = !enabled
-    }
-
-    if (desktopVideoRef.current) {
-      desktopVideoRef.current.muted = !enabled
-    }
-  }, [])
+  // Only one of the two is mounted at a time, so both can follow the same
+  // preferences without fighting over the element.
+  const mobilePlayer = useVideoPlayerPreferences(mobileVideoRef)
+  const desktopPlayer = useVideoPlayerPreferences(desktopVideoRef)
+  const { isSoundEnabled, volume, speed } = isDesktopViewport ? desktopPlayer : mobilePlayer
 
   const getActiveVideo = useCallback(() => {
     if (isDesktopViewport === null) {
@@ -116,16 +129,9 @@ const Post = ({ params }: PostPageTypes) => {
     return isDesktopViewport ? desktopVideoRef.current : mobileVideoRef.current
   }, [isDesktopViewport])
 
-  const toggleSound = () => {
-    const enabled = !isSoundEnabled
-    setVideoSoundEnabled(enabled)
-    syncSoundState(enabled)
-
-    if (enabled) {
-      const activeVideo = getActiveVideo()
-      activeVideo?.play().catch(() => null)
-    }
-  }
+  const resumeAfterUnmute = useCallback(() => {
+    getActiveVideo()?.play().catch(() => null)
+  }, [getActiveVideo])
 
   const playDetailVideo = useCallback((video: HTMLVideoElement | null) => {
     if (!video) {
@@ -136,13 +142,14 @@ const Post = ({ params }: PostPageTypes) => {
 
     video.play().catch(() => {
       if (!video.muted) {
+        // Autoplay with sound is blocked until the page has been interacted
+        // with. Writing the preference propagates the mute to every player.
         setVideoSoundEnabled(false)
-        syncSoundState(false)
         video.muted = true
         video.play().catch(() => null)
       }
     })
-  }, [syncSoundState])
+  }, [])
 
   const initializeDetailVideo = useCallback((video: HTMLVideoElement | null) => {
     if (!video) {
@@ -247,12 +254,88 @@ const Post = ({ params }: PostPageTypes) => {
   }, [params.postId])
 
   useEffect(() => {
-    syncSoundState(getVideoSoundEnabled())
+    setIsCaptionsEnabled(getVideoCaptionsEnabled())
+    return subscribeToVideoCaptionsPreference(setIsCaptionsEnabled)
+  }, [])
 
-    return subscribeToVideoSoundPreference((enabled) => {
-      syncSoundState(enabled)
-    })
-  }, [syncSoundState])
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    setIsFloatingPlayerSupported(Boolean(document.pictureInPictureEnabled))
+  }, [])
+
+  useEffect(() => {
+    const video = getActiveVideo()
+    if (!video) return
+
+    const onEnter = () => setIsFloatingPlayerActive(true)
+    const onLeave = () => setIsFloatingPlayerActive(false)
+
+    video.addEventListener('enterpictureinpicture', onEnter)
+    video.addEventListener('leavepictureinpicture', onLeave)
+
+    return () => {
+      video.removeEventListener('enterpictureinpicture', onEnter)
+      video.removeEventListener('leavepictureinpicture', onLeave)
+    }
+  }, [getActiveVideo, isDesktopViewport, postById?.video_url])
+
+  const toggleFloatingPlayer = useCallback(async () => {
+    const video = getActiveVideo()
+    if (!video || typeof document === 'undefined') return
+
+    try {
+      if (document.pictureInPictureElement === video) {
+        await document.exitPictureInPicture()
+        return
+      }
+
+      await video.requestPictureInPicture()
+    } catch (error) {
+      console.error(error)
+    }
+  }, [getActiveVideo])
+
+  /** One query per post, cached in app/utils/captions.ts. */
+  const loadCaptions = useCallback(async () => {
+    if (postIsImage || captionsState !== 'unknown') return
+
+    try {
+      const captions = await fetchPostCaptions(params.postId)
+      if (captions.length < 1) {
+        setCaptionsState('none')
+        return
+      }
+
+      setCaptionsState('available')
+      setCaptionTrackUrl(await createCaptionObjectUrl(captions[0].storage_key))
+    } catch (error) {
+      console.error(error)
+      setCaptionsState('none')
+    }
+  }, [captionsState, params.postId, postIsImage])
+
+  useEffect(() => {
+    if (isCaptionsEnabled) void loadCaptions()
+  }, [isCaptionsEnabled, loadCaptions])
+
+  // Reset per post: a cached 'none' from the previous video would otherwise
+  // hide a track this one does have.
+  useEffect(() => {
+    setCaptionsState('unknown')
+    setCaptionTrackUrl('')
+  }, [params.postId])
+
+  useEffect(() => {
+    if (!captionTrackUrl) return
+    return () => URL.revokeObjectURL(captionTrackUrl)
+  }, [captionTrackUrl])
+
+  useEffect(() => {
+    const track = getActiveVideo()?.textTracks?.[0]
+    if (!track) return
+
+    track.mode = isCaptionsEnabled ? 'showing' : 'hidden'
+  }, [captionTrackUrl, getActiveVideo, isCaptionsEnabled, isDesktopViewport])
 
   useEffect(() => {
     return () => {
@@ -313,10 +396,6 @@ const Post = ({ params }: PostPageTypes) => {
     ? 'h-full max-h-[calc(100dvh-64px)] w-auto max-w-full rounded-sm object-contain'
     : 'h-auto max-h-[calc(100dvh-64px)] w-full max-w-[1120px] rounded-sm object-contain'
   const desktopVideoStyle = videoAspectRatio ? { aspectRatio: String(videoAspectRatio) } : undefined
-  const postIsImage = isImagePost(postById?.video_url)
-  const postImageIds = getImagePostIds(postById?.video_url)
-  const postAudioId = getImagePostAudioId(postById?.video_url)
-  const hasImageAudio = postIsImage && Boolean(postAudioId)
 
   return (
     <>
@@ -331,6 +410,8 @@ const Post = ({ params }: PostPageTypes) => {
                     imageIds={postImageIds}
                     audioId={postAudioId}
                     muted={!isSoundEnabled}
+                    volume={volume}
+                    speed={speed}
                     autoPlay
                     onCycleComplete={handleVideoEnded}
                     className="h-full w-full"
@@ -349,7 +430,11 @@ const Post = ({ params }: PostPageTypes) => {
                     onPlay={() => pauseOtherVideos(mobileVideoRef.current)}
                     className="h-full w-full object-contain"
                     src={useCreateBucketUrl(postById.video_url)}
-                  />
+                  >
+                    {captionTrackUrl ? (
+                      <track kind="captions" srcLang="en" label="Captions" src={captionTrackUrl} default />
+                    ) : null}
+                  </video>
                 )
               ) : (
                 <div className="h-full bg-black flex items-center justify-center">
@@ -360,14 +445,12 @@ const Post = ({ params }: PostPageTypes) => {
           </ClientOnly>
 
           {!postIsImage || hasImageAudio ? (
-            <button
-              onClick={() => toggleSound()}
-              aria-label={isSoundEnabled ? 'Mute' : 'Unmute'}
-              className="absolute right-4 top-[calc(env(safe-area-inset-top)+12px)] z-30 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
-            >
-              {isSoundEnabled ? <BsVolumeUpFill size={16} /> : <BsVolumeMuteFill size={16} />}
-              {!isSoundEnabled ? 'Tap for sound' : null}
-            </button>
+            <VolumeControl
+              isSoundEnabled={isSoundEnabled}
+              volume={volume}
+              onUnmute={postIsImage ? undefined : resumeAfterUnmute}
+              className="absolute right-4 top-[calc(env(safe-area-inset-top)+12px)]"
+            />
           ) : null}
 
           <VideoOptionsMenu
@@ -375,6 +458,17 @@ const Post = ({ params }: PostPageTypes) => {
             onAutoScrollChange={handleAutoScrollChange}
             postId={params.postId}
             postUserId={params.userId}
+            mediaKind={postIsImage ? 'image' : 'video'}
+            qualityLabel={resolutionLabel(postById?.width, postById?.height)}
+            isFloatingPlayerSupported={isFloatingPlayerSupported}
+            isFloatingPlayerActive={isFloatingPlayerActive}
+            onToggleFloatingPlayer={toggleFloatingPlayer}
+            captionsState={captionsState}
+            isCaptionsEnabled={isCaptionsEnabled}
+            onCaptionsChange={setVideoCaptionsEnabled}
+            onOpenChange={(menuIsOpen) => {
+              if (menuIsOpen) void loadCaptions()
+            }}
             className="absolute right-4 top-[calc(env(safe-area-inset-top)+54px)]"
           />
 
@@ -514,6 +608,17 @@ const Post = ({ params }: PostPageTypes) => {
                     onAutoScrollChange={handleAutoScrollChange}
                     postId={params.postId}
                     postUserId={params.userId}
+                    mediaKind={postIsImage ? 'image' : 'video'}
+                    qualityLabel={resolutionLabel(postById?.width, postById?.height)}
+                    isFloatingPlayerSupported={isFloatingPlayerSupported}
+                    isFloatingPlayerActive={isFloatingPlayerActive}
+                    onToggleFloatingPlayer={toggleFloatingPlayer}
+                    captionsState={captionsState}
+                    isCaptionsEnabled={isCaptionsEnabled}
+                    onCaptionsChange={setVideoCaptionsEnabled}
+                    onOpenChange={(menuIsOpen) => {
+                      if (menuIsOpen) void loadCaptions()
+                    }}
                     className="absolute right-5 top-5"
                   />
 
@@ -526,6 +631,8 @@ const Post = ({ params }: PostPageTypes) => {
                         imageIds={postImageIds}
                         audioId={postAudioId}
                         muted={!isSoundEnabled}
+                        volume={volume}
+                        speed={speed}
                         autoPlay
                         onCycleComplete={handleVideoEnded}
                         className="h-full max-h-[calc(100dvh-64px)] w-full max-w-[1120px] rounded-sm"
@@ -533,14 +640,12 @@ const Post = ({ params }: PostPageTypes) => {
                         altPrefix={`${postById.profile.name} image`}
                       />
                       {hasImageAudio ? (
-                        <button
-                          onClick={() => toggleSound()}
-                          aria-label={isSoundEnabled ? 'Mute' : 'Unmute'}
-                          className="absolute left-5 top-16 z-30 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
-                        >
-                          {isSoundEnabled ? <BsVolumeUpFill size={16} /> : <BsVolumeMuteFill size={16} />}
-                          {!isSoundEnabled ? 'Click for sound' : null}
-                        </button>
+                        <VolumeControl
+                          isSoundEnabled={isSoundEnabled}
+                          volume={volume}
+                          hint="Click for sound"
+                          className="absolute left-5 top-16"
+                        />
                       ) : null}
                       </>
                     ) : (
@@ -558,16 +663,18 @@ const Post = ({ params }: PostPageTypes) => {
                           className={desktopVideoClassName}
                           style={desktopVideoStyle}
                           src={useCreateBucketUrl(postById.video_url)}
+                        >
+                          {captionTrackUrl ? (
+                            <track kind="captions" srcLang="en" label="Captions" src={captionTrackUrl} default />
+                          ) : null}
+                        </video>
+                        <VolumeControl
+                          isSoundEnabled={isSoundEnabled}
+                          volume={volume}
+                          onUnmute={resumeAfterUnmute}
+                          hint="Click for sound"
+                          className="absolute left-5 top-16"
                         />
-                        {!isSoundEnabled ? (
-                          <button
-                            onClick={() => toggleSound()}
-                            className="absolute left-5 top-16 z-30 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white"
-                          >
-                            <BsVolumeMuteFill size={16} />
-                            Click for sound
-                          </button>
-                        ) : null}
                       </>
                     )}
                     </>

@@ -1,8 +1,10 @@
-import { MouseEvent } from 'react'
+import { MouseEvent, ReactNode } from 'react'
 
 type AutoScrollToggleProps = {
   enabled: boolean
   onChange: (enabled: boolean) => void
+  /** Rendered before the label, so the row lines up with the icon rows around it. */
+  icon?: ReactNode
   className?: string
   labelClassName?: string
 }
@@ -10,6 +12,7 @@ type AutoScrollToggleProps = {
 const AutoScrollToggle = ({
   enabled,
   onChange,
+  icon,
   className = '',
   labelClassName = '',
 }: AutoScrollToggleProps) => {
@@ -28,7 +31,10 @@ const AutoScrollToggle = ({
       className={`flex items-center justify-between gap-3 ${className}`}
       aria-label="Toggle auto scroll"
     >
-      <span className={labelClassName}>Auto scroll</span>
+      <span className={`flex items-center gap-2.5 ${labelClassName}`}>
+        {icon}
+        Auto scroll
+      </span>
       <span
         className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-colors ${
           enabled ? 'bg-[#5fd4ee]' : 'bg-white/25'
