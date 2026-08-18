@@ -23,7 +23,7 @@ const SingleComment = ({ comment, params }: SingleCommentCompTypes) => {
             await useDeleteComment(comment?.id)
             setCommentsByPost(params?.postId)
         } catch (error) {
-            console.log(error)
+            console.error(error)
             alert(error)
         } finally {
             setIsDeleting(false)

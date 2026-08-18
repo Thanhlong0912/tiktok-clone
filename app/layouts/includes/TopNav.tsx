@@ -79,7 +79,7 @@ const TopNav = () => {
         if (result) return setSearchProfiles(result)
         setSearchProfiles([])
     } catch (error) {
-        console.log(error)
+        console.error(error)
         setSearchProfiles([])
     }
   }, 500), [])

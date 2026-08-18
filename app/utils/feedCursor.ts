@@ -24,6 +24,16 @@ export interface FeedCursor {
   p: number
   /** Last row's score, verbatim. */
   sc: string
+  /**
+   * Last row's created_at, verbatim.
+   *
+   * The Following feed is chronological, not ranked: get_following_feed returns
+   * a constant 0 for `score` and keysets on (created_at, id) instead. The old
+   * cursor carried only `sc`, so the client sent the string "0" as the
+   * timestamp argument -- a numeric handed to ::timestamptz, which is why the
+   * Following feed never got past its first page.
+   */
+  ts: string
   /** Last row's post id. */
   id: string
   /** Session start, ISO. Used to expire a cursor left open overnight. */
@@ -34,6 +44,7 @@ export interface FeedCursor {
 export interface CursorSource {
   id: string
   score: string | number | null
+  created_at?: string | null
 }
 
 export function createFeedSession(): string {
@@ -78,6 +89,7 @@ export function nextFeedCursor(
     s: session,
     p: (previous ? previous.p : 0) + 1,
     sc: last.score === null || last.score === undefined ? '' : String(last.score),
+    ts: last.created_at ?? '',
     id: last.id,
     t: startedAt,
   }
@@ -89,6 +101,28 @@ export function toRpcCursor(cursor: FeedCursor | null): Record<string, string> |
   return { s: cursor.s, sc: cursor.sc, id: cursor.id }
 }
 
+/**
+ * What the chronological feeds expect: a (created_at, id) keyset.
+ *
+ * Returns null when the timestamp is missing rather than sending an empty or
+ * bogus one -- the RPC treats a null cursor as "first page", which is a
+ * recoverable outcome, while a bad ts is a hard cast error.
+ */
+export function toChronoCursor(
+  cursor: FeedCursor | null
+): { ts: string; id: string } | null {
+  if (!cursor || !cursor.ts || !cursor.id) return null
+  return { ts: cursor.ts, id: cursor.id }
+}
+
+/**
+ * Serialisation for a cursor that outlives the tab.
+ *
+ * Not wired into the store today -- the feed deliberately starts fresh on every
+ * load rather than restoring a stale ranking. Kept, with its tests, because the
+ * validation in decodeFeedCursor is the hard part and is what any future
+ * "resume where you left off" needs; it is not accidental dead code.
+ */
 export function encodeFeedCursor(cursor: FeedCursor): string {
   return JSON.stringify(cursor)
 }
@@ -127,6 +161,7 @@ export function decodeFeedCursor(
     s: parsed.s,
     p: typeof parsed.p === 'number' ? parsed.p : 0,
     sc: parsed.sc,
+    ts: typeof parsed.ts === 'string' ? parsed.ts : '',
     id: parsed.id,
     t: parsed.t,
   }

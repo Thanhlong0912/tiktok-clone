@@ -48,12 +48,24 @@ function registryLookup(key: string): string | null {
   }
 }
 
+/** How long an unresolved mention stays unresolved before we look again. */
+const NEGATIVE_TTL_MS = 5 * 60 * 1000
+const negativeUntil = new Map<string, number>()
+
 export function resolveMentionUserId(name: string): Promise<string | null> {
   const key = mentionKey(name)
   if (!key) return Promise.resolve(null)
 
   const cached = resolutionCache.get(key)
   if (cached) return cached
+
+  // A miss used to be cached forever, so a mention of an account that had not
+  // loaded yet stayed plain text for the rest of the session no matter how many
+  // times it was rendered afterwards.
+  const suppressedUntil = negativeUntil.get(key)
+  if (suppressedUntil && Date.now() < suppressedUntil) {
+    return Promise.resolve(null)
+  }
 
   const promise = (async () => {
     const fromRegistry = registryLookup(key)
@@ -74,6 +86,13 @@ export function resolveMentionUserId(name: string): Promise<string | null> {
     return null
   })()
 
+  // Only successes are cached permanently; a null is retried after the TTL.
   resolutionCache.set(key, promise)
+  void promise.then((userId) => {
+    if (userId) return
+    resolutionCache.delete(key)
+    negativeUntil.set(key, Date.now() + NEGATIVE_TTL_MS)
+  })
+
   return promise
 }

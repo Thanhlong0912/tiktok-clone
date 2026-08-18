@@ -50,7 +50,7 @@ const Login = () => {
         setLoading(false)
         setIsLoginOpen(false)
     } catch (error) {
-        console.log(error)
+        console.error(error)
         setLoading(false)
         // Supabase answers both an unknown email and a wrong password with the
         // same generic message, so say that rather than leaking the raw error.

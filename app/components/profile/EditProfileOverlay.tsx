@@ -7,16 +7,16 @@ import { BsPencil } from "react-icons/bs";
 import { AiOutlineClose } from "react-icons/ai";
 import { BiLoaderCircle } from "react-icons/bi";
 import TextInput from '../TextInput';
-import { useProfileStore } from '@/app/stores/profile';
 import { useGeneralStore } from '@/app/stores/general';
 import { useUser } from '@/app/context/user';
 import useUpdateProfile from '@/app/hooks/useUpdateProfile';
-import useChangeUserImage from '@/app/hooks/useChangeUserImage';
+import useChangeUserImage, { deletePreviousAvatar } from '@/app/hooks/useChangeUserImage';
 import useUpdateProfileImage from '@/app/hooks/useUpdateProfileImage';
 import useCreateBucketUrl from '@/app/hooks/useCreateBucketUrl';
+import { fetchProfile } from '@/app/utils/feed';
+import { showToast } from '@/app/utils/toast';
 
 const EditProfileOverlay = () => {
-    let { currentProfile, setCurrentProfile } = useProfileStore()
     let { setIsEditProfileOpen } = useGeneralStore()
 
     const contextUser = useUser()
@@ -29,13 +29,40 @@ const EditProfileOverlay = () => {
     const [userName, setUserName] = useState<string | ''>('');
     const [userBio, setUserBio] = useState<string | ''>('');
     const [isUpdating, setIsUpdating] = useState(false);
+    const [isLoadingProfile, setIsLoadingProfile] = useState(true);
     const [error, setError] = useState<ShowErrorObject | null>(null)
 
+    const userId = contextUser?.user?.id
+
+    /**
+     * Read straight from get_profile rather than useProfileStore.
+     *
+     * Nothing ever populated that store -- the profile page stopped using it --
+     * so this form opened blank, with a broken avatar, and saved an empty id.
+     */
     useEffect(() => {
-        setUserName(currentProfile?.name || '')
-        setUserBio(currentProfile?.bio || '')
-        setUserImage(currentProfile?.image || '')
-    }, [])
+        if (!userId) return
+
+        let active = true
+        setIsLoadingProfile(true)
+
+        fetchProfile(userId)
+            .then((profile) => {
+                if (!active || !profile) return
+                setUserName(profile.name || '')
+                setUserBio(profile.bio || '')
+                setUserImage(profile.image || '')
+            })
+            .catch((error) => {
+                console.error(error)
+                if (active) showToast('Could not load your profile', 'error')
+            })
+            .finally(() => {
+                if (active) setIsLoadingProfile(false)
+            })
+
+        return () => { active = false }
+    }, [userId])
 
     const getUploadedImage = (event: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFile = event.target.files && event.target.files[0];
@@ -52,41 +79,58 @@ const EditProfileOverlay = () => {
     const updateUserInfo = async () => {
         let isError = validate()
         if (isError) return
-        if (!contextUser?.user) return
+        if (!userId) return
 
         try {
             setIsUpdating(true)
-            await useUpdateProfile(currentProfile?.id || '', userName, userBio)
-            setCurrentProfile(contextUser?.user?.id)
-            setIsEditProfileOpen(false)
-            router.refresh()
+            await useUpdateProfile(userId, userName.trim(), userBio.trim())
 
+            // Refreshes the name and avatar the top nav renders from context.
+            await contextUser?.checkUser()
+            setIsEditProfileOpen(false)
+            showToast('Profile updated')
+            router.refresh()
         } catch (error) {
-            console.log(error)
+            // Was swallowed into console.log, and isUpdating was never reset --
+            // a failed save left the button spinning with nothing to explain it.
+            console.error(error)
+            showToast('Could not save your profile', 'error')
+        } finally {
+            setIsUpdating(false)
         }
     }
 
     const cropAndUpdateImage = async () => {
         let isError = validate()
         if (isError) return
-        if (!contextUser?.user) return
+        if (!userId) return
+
+        if (!file || !cropper) {
+            showToast('Choose an image first', 'error')
+            return
+        }
 
         try {
-            if (!file) return alert('You have no file')
-            if (!cropper) return alert('You have no file')
             setIsUpdating(true)
 
-            const newImageId = await useChangeUserImage(file, cropper, userImage)
-            await useUpdateProfileImage(currentProfile?.id || '', newImageId)
+            const previousImage = userImage
+            const newImageId = await useChangeUserImage(file, cropper)
+            await useUpdateProfileImage(userId, newImageId)
 
-            await contextUser.checkUser()
-            setCurrentProfile(contextUser?.user?.id)
+            // Only now is the old file safe to remove: until the row above is
+            // written, it is still the avatar the profile points at.
+            await deletePreviousAvatar(previousImage)
+
+            setUserImage(newImageId)
+            await contextUser?.checkUser()
             setIsEditProfileOpen(false)
-            setIsUpdating(false)
+            showToast('Profile photo updated')
+            router.refresh()
         } catch (error) {
-            console.log(error)
+            console.error(error)
+            showToast('Could not update your profile photo', 'error')
+        } finally {
             setIsUpdating(false)
-            alert(error)
         }
     }
 
@@ -135,11 +179,15 @@ const EditProfileOverlay = () => {
 
                 <div className={`h-[calc(500px-200px)] ${!uploadedImage ? 'mt-16' : 'mt-[58px]'}`}>
 
-                    {!uploadedImage ? (
+                    {isLoadingProfile ? (
+                        <div className="flex h-full items-center justify-center">
+                            <BiLoaderCircle className="animate-spin text-ink-soft" size="30" />
+                        </div>
+                    ) : !uploadedImage ? (
                         <div>
                             <div
                                 id="ProfilePhotoSection"
-                                className="flex flex-col border-b sm:h-[118px] h-[145px] px-1.5 py-2 w-full"
+                                className="flex flex-col border-b border-line sm:h-[118px] h-[145px] px-1.5 py-2 w-full"
                             >
                                 <h3 className="font-semibold text-[15px] sm:mb-0 mb-1 text-ink sm:w-[160px] sm:text-left text-center">
                                     Profile photo
@@ -166,7 +214,7 @@ const EditProfileOverlay = () => {
 
                             <div
                                 id="UserNameSection"
-                                className="flex flex-col border-b sm:h-[118px]  px-1.5 py-2 mt-1.5  w-full"
+                                className="flex flex-col border-b border-line sm:h-[118px]  px-1.5 py-2 mt-1.5  w-full"
                             >
                                 <h3 className="font-semibold text-[15px] sm:mb-0 mb-1 text-ink sm:w-[160px] sm:text-left text-center">
                                     Name
@@ -257,7 +305,7 @@ const EditProfileOverlay = () => {
                             <button
                                 disabled={isUpdating}
                                 onClick={() => updateUserInfo()}
-                                className="flex items-center bg-[#F02C56] text-white border rounded-md ml-3 px-3 py-[6px]"
+                                className="flex items-center bg-tiktok text-white rounded-md ml-3 disabled:opacity-60 px-3 py-[6px]"
                             >
                                 <span className="mx-4 font-medium text-[15px]">
                                     {isUpdating ? <BiLoaderCircle color="#ffffff" className="my-1 mx-2.5 animate-spin" /> : "Save" }
@@ -277,7 +325,7 @@ const EditProfileOverlay = () => {
 
                             <button
                                 onClick={() => cropAndUpdateImage()}
-                                className="flex items-center bg-[#F02C56] text-white border rounded-md ml-3 px-3 py-[6px]"
+                                className="flex items-center bg-tiktok text-white rounded-md ml-3 disabled:opacity-60 px-3 py-[6px]"
                             >
                                 <span className="mx-4 font-medium text-[15px]">
                                     {isUpdating ? <BiLoaderCircle color="#ffffff" className="my-1 mx-2.5 animate-spin" /> : "Apply" }

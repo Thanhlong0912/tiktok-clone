@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import SearchParamReader from '../components/SearchParamReader'
 import { debounce } from 'debounce'
 import { BiSearch } from 'react-icons/bi'
 import { AiFillHeart, AiFillPlayCircle } from 'react-icons/ai'
@@ -23,6 +24,7 @@ import {
   fetchTrendingCreators,
   fetchTrendingHashtags,
   searchAll,
+  searchVideos,
   type SearchResults,
   type TrendingCreator,
   type TrendingHashtag,
@@ -56,7 +58,6 @@ const RESULT_TABS: Array<{ key: ResultTab; label: string }> = [
  */
 export default function ExplorePage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
 
   const [query, setQuery] = useState('')
   const [activeTab, setActiveTab] = useState<ResultTab>('top')
@@ -71,6 +72,10 @@ export default function ExplorePage() {
 
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
+  // Paging state for whichever grid is on screen: discover, a hashtag page, or
+  // video search results. All three were previously a single fixed page.
+  const [isPagingGrid, setIsPagingGrid] = useState(false)
+  const [hasMoreGrid, setHasMoreGrid] = useState(true)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Explore gets its own feed session so browsing here does not consume the
@@ -162,15 +167,24 @@ export default function ExplorePage() {
   }, [activeTag])
 
   // Search launched from the header lands here as /explore?q=...
+  // Tracked in a ref rather than compared against `query` inside a state
+  // updater: updaters must stay pure, and React may invoke them twice.
+  const appliedQueryParamRef = useRef<string | null>(null)
+
+  const applyQueryParam = useCallback((incoming: string) => {
+    if (!incoming || appliedQueryParamRef.current === incoming) return
+
+    appliedQueryParamRef.current = incoming
+    setQuery(incoming)
+    setShowSuggestions(false)
+    runSearch(incoming)
+  }, [runSearch])
+
+  // Clearing the query used to leave the result tab where it was, so the next
+  // search opened on "Hashtags" for no reason the viewer could see.
   useEffect(() => {
-    const incoming = searchParams.get('q') || ''
-    if (incoming && incoming !== query) {
-      setQuery(incoming)
-      setShowSuggestions(false)
-      runSearch(incoming)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams])
+    if (!isSearching) setActiveTab('top')
+  }, [isSearching])
 
   const commitSearch = (value: string) => {
     const clean = value.trim()
@@ -190,11 +204,59 @@ export default function ExplorePage() {
   const hasSuggestions =
     showSuggestions && isSearching && (results.hashtags.length > 0 || results.users.length > 0)
 
+  /**
+   * One pager for all three grids.
+   *
+   * searchVideos has always been cursor-capable and was never called: the
+   * Videos tab showed the 12 rows search_top embeds and stopped there, hashtag
+   * pages stopped at 30, and discover at 24.
+   */
+  const loadMoreGrid = useCallback(async () => {
+    if (isPagingGrid || !hasMoreGrid || gridPosts.length < 1) return
+
+    const last = gridPosts[gridPosts.length - 1]
+    setIsPagingGrid(true)
+
+    try {
+      if (activeTag) {
+        const next = await fetchPostsByHashtag(activeTag, { ts: last.created_at, id: last.id }, 24)
+        setTagPosts((current) => current.concat(next))
+        setHasMoreGrid(next.length >= 24)
+      } else if (isSearching) {
+        const next = await searchVideos(cleanQuery, { sc: last.score, id: last.id }, 24)
+        setResults((current) => ({ ...current, videos: current.videos.concat(next) }))
+        setHasMoreGrid(next.length >= 24)
+      } else {
+        // Same feed session, so the server keeps deduping against what this
+        // page has already shown.
+        const next = await fetchFeed('for-you', null, sessionRef.current, 24)
+        setDiscoverPosts((current) => current.concat(next))
+        setHasMoreGrid(next.length >= 24)
+      }
+    } catch (error) {
+      console.error(error)
+      setHasMoreGrid(false)
+    } finally {
+      setIsPagingGrid(false)
+    }
+  }, [activeTag, cleanQuery, gridPosts, hasMoreGrid, isPagingGrid, isSearching])
+
+  // A new query or tag is a new list, so paging starts over.
+  useEffect(() => {
+    setHasMoreGrid(true)
+  }, [activeTag, cleanQuery])
+
   const openPost = (post: PostWithProfile) =>
     router.push(`/post/${post.id}/${post.profile.user_id}`)
 
   return (
     <MainLayout>
+      {/* Renders nothing, so the Suspense boundary useSearchParams requires
+          costs no prerendered markup. */}
+      <Suspense fallback={null}>
+        <SearchParamReader name="q" onValue={applyQueryParam} />
+      </Suspense>
+
       <div className="mx-auto w-full max-w-[1140px] px-3 pb-24 pt-[76px] md:pl-[80px] lg:pl-[240px]">
         {/* Search */}
         <div className="relative mx-auto max-w-[520px]">
@@ -401,11 +463,25 @@ export default function ExplorePage() {
               detail={isSearching ? `Nothing matches "${cleanQuery}".` : 'New videos will show up here.'}
             />
           ) : (
-            <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              {gridPosts.map((post) => (
-                <ExploreThumb key={post.id} post={post} onClick={() => openPost(post)} />
-              ))}
-            </div>
+            <>
+              <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {gridPosts.map((post) => (
+                  <ExploreThumb key={post.id} post={post} onClick={() => openPost(post)} />
+                ))}
+              </div>
+
+              {hasMoreGrid ? (
+                <div className="mt-6 text-center">
+                  <button
+                    onClick={loadMoreGrid}
+                    disabled={isPagingGrid}
+                    className="rounded-full bg-surface-subtle px-6 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-line disabled:opacity-60"
+                  >
+                    {isPagingGrid ? 'Loading...' : 'Load more'}
+                  </button>
+                </div>
+              ) : null}
+            </>
           )}
         </ClientOnly>
       </div>

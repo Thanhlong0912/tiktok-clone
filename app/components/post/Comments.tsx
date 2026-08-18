@@ -43,7 +43,7 @@ const Comments = ({ params, isMobileDetail = false, autoFocusInput = false }: Co
       setCommentsByPost(params?.postId)
       setComment('')
     } catch (error) {
-      console.log(error)
+      console.error(error)
       showToast('Could not post comment', 'error')
     } finally {
       setIsUploading(false)

@@ -242,6 +242,19 @@ const PostMain = ({
     setVideoProgress((next / video.duration) * 100)
   }, [])
 
+  /**
+   * The observer below reads the sound preference but must not DEPEND on it.
+   *
+   * With isSoundEnabled in the dependency array, toggling sound tore down and
+   * rebuilt the IntersectionObserver in every mounted card, and each rebuild
+   * re-fired the intersecting branch -- calling play() again on cards the
+   * viewer had already paused.
+   */
+  const isSoundEnabledRef = useRef<boolean>(isSoundEnabled)
+  useEffect(() => {
+    isSoundEnabledRef.current = isSoundEnabled
+  }, [isSoundEnabled])
+
   useEffect(() => {
     const postMainElement = postMainRef.current
 
@@ -258,7 +271,7 @@ const PostMain = ({
           }
 
           pauseOtherVideos(activeVideo)
-          activeVideo.muted = !isSoundEnabled
+          activeVideo.muted = !isSoundEnabledRef.current
           activeVideo
             .play()
             .then(() => setIsVideoPaused(false))
@@ -310,7 +323,7 @@ const PostMain = ({
         observer.unobserve(postMainElement)
       }
     }
-  }, [isSoundEnabled, post.id, postIsImage])
+  }, [post.id, postIsImage])
 
   useEffect(() => {
     const postMainElement = postMainRef.current

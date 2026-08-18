@@ -32,14 +32,16 @@ import {
   type VideoPlaybackSnapshot,
 } from '@/app/utils/videoPlayback'
 import { setVideoSoundEnabled } from '@/app/utils/videoSoundPreference'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
+import SearchParamReader from '@/app/components/SearchParamReader'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AiOutlineClose } from 'react-icons/ai'
 import { BiChevronDown, BiChevronUp } from 'react-icons/bi'
 
 const Post = ({ params }: PostPageTypes) => {
-  const { postById, postsByUser, setPostById, setPostsByUser } = usePostStore()
-  const { commentsByPost, setCommentsByPost } = useCommentStore()
+  const { postById, postByIdStatus, postsByUser, setPostById, setPostsByUser } = usePostStore()
+  const { commentsByPost, setCommentsByPost, clearComments } = useCommentStore()
 
   const [isMobileSheetExpanded, setIsMobileSheetExpanded] = useState<boolean>(false)
   const [isSheetDragging, setIsSheetDragging] = useState<boolean>(false)
@@ -63,14 +65,20 @@ const Post = ({ params }: PostPageTypes) => {
 
   const router = useRouter()
   const pathname = usePathname()
-  const searchParams = useSearchParams()
-  const shouldOpenCommentsMode = searchParams.get('comments') === '1'
+  // Driven by SearchParamReader so useSearchParams stays inside a component
+  // that renders nothing -- calling it here would force the whole page to
+  // prerender as its Suspense fallback, losing all of its static markup.
+  const [shouldOpenCommentsMode, setShouldOpenCommentsMode] = useState<boolean>(false)
 
   useEffect(() => {
+    // Cleared first: navigating between posts otherwise left the previous
+    // post's comment thread on screen under the new video until the fetch
+    // resolved.
+    clearComments()
     setPostById(params.postId)
     setCommentsByPost(params.postId)
     setPostsByUser(params.userId)
-  }, [params.postId, params.userId, setCommentsByPost, setPostById, setPostsByUser])
+  }, [params.postId, params.userId, clearComments, setCommentsByPost, setPostById, setPostsByUser])
 
   useEffect(() => {
     if (shouldOpenCommentsMode) {
@@ -225,8 +233,22 @@ const Post = ({ params }: PostPageTypes) => {
     router.push(`/post/${nextPost.id}/${nextPost.user_id || params.userId}`)
   }
 
+  /**
+   * Goes back where the viewer came from.
+   *
+   * This used to always push /profile/<author>, so closing a post opened from
+   * the feed dumped you on a stranger's profile instead of returning you to the
+   * feed you were scrolling. Falls back to the author's profile only when there
+   * is no history to return to (a permalink opened in a fresh tab).
+   */
   const closePostDetail = useCallback(() => {
     pauseCurrentVideos(true)
+
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back()
+      return
+    }
+
     router.push(`/profile/${params.userId}`)
   }, [params.userId, pauseCurrentVideos, router])
 
@@ -397,8 +419,40 @@ const Post = ({ params }: PostPageTypes) => {
     : 'h-auto max-h-[calc(100dvh-64px)] w-full max-w-[1120px] rounded-sm object-contain'
   const desktopVideoStyle = videoAspectRatio ? { aspectRatio: String(videoAspectRatio) } : undefined
 
+  if (postByIdStatus === 'missing') {
+    return (
+      <div className="flex h-[100dvh] w-full flex-col items-center justify-center bg-black px-8 text-center text-white">
+        <p className="text-[20px] font-bold">This video isn&apos;t available.</p>
+        <p className="mt-2 max-w-xs text-[15px] text-white/70">
+          It may have been deleted by its owner, or the link may be broken.
+        </p>
+        <div className="mt-6 flex items-center gap-3">
+          <Link
+            href="/"
+            className="rounded-md bg-tiktok px-6 py-2.5 text-[15px] font-semibold text-white hover:bg-tiktok-hover"
+          >
+            Go to feed
+          </Link>
+          <button
+            onClick={closePostDetail}
+            className="rounded-md border border-white/30 px-6 py-2.5 text-[15px] font-semibold text-white hover:bg-white/10"
+          >
+            Go back
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <>
+      <Suspense fallback={null}>
+        <SearchParamReader
+          name="comments"
+          onValue={(value) => setShouldOpenCommentsMode(value === '1')}
+        />
+      </Suspense>
+
       <div id="PostPage" className="h-[100dvh] w-full overflow-hidden bg-black">
         <div className="relative h-full w-full lg:hidden">
           <ClientOnly>

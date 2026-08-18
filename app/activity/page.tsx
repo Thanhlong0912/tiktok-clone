@@ -2,7 +2,7 @@
 
 import moment from 'moment'
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { AiFillHeart, AiOutlineRetweet } from 'react-icons/ai'
 import { FaCommentDots, FaUserPlus, FaAt } from 'react-icons/fa'
 import { BiBell } from 'react-icons/bi'
@@ -77,7 +77,7 @@ export default function ActivityPage() {
       setIsLoading(true)
       setHasError(false)
       try {
-        const page = await fetchNotifications(null, 30)
+        const page = await fetchNotifications(null, 30, TAB_TYPE[tab])
         if (cancelled) return
 
         setItems(page)
@@ -105,14 +105,14 @@ export default function ActivityPage() {
     return () => {
       cancelled = true
     }
-  }, [user?.id, reloadKey])
+  }, [user?.id, reloadKey, tab])
 
   const loadMore = useCallback(async () => {
     if (!cursor || isPaging || !hasMore) return
 
     setIsPaging(true)
     try {
-      const page = await fetchNotifications(cursor, 30)
+      const page = await fetchNotifications(cursor, 30, TAB_TYPE[tab])
       setItems((current) => current.concat(page))
       setCursor(nextNotificationCursor(page))
       setHasMore(page.length >= 30)
@@ -121,12 +121,10 @@ export default function ActivityPage() {
     } finally {
       setIsPaging(false)
     }
-  }, [cursor, hasMore, isPaging])
+  }, [cursor, hasMore, isPaging, tab])
 
-  const visibleItems = useMemo(() => {
-    const type = TAB_TYPE[tab]
-    return type ? items.filter((item) => item.type === type) : items
-  }, [items, tab])
+  // The server already returned only this tab's type -- no client filter.
+  const visibleItems = items
 
   return (
     <MainLayout>

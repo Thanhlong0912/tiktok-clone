@@ -23,7 +23,7 @@ import ClientOnly from '../ClientOnly'
 
 const CommentsHeader = ({ post, params, isMobileDetail = false }: CommentsHeaderCompTypes) => {
 
-    const { commentsByPost, setCommentsByPost } = useCommentStore()
+    const { commentsByPost } = useCommentStore()
     const { setIsLoginOpen } = useGeneralStore()
 
     const contextUser = useUser()
@@ -57,9 +57,9 @@ const CommentsHeader = ({ post, params, isMobileDetail = false }: CommentsHeader
         setRepostCount(post?.repost_count ?? 0)
     }, [post?.is_liked, post?.like_count, post?.is_saved, post?.save_count, post?.is_reposted, post?.repost_count])
 
-    useEffect(() => {
-        if (params?.postId) setCommentsByPost(params.postId)
-    }, [params?.postId, setCommentsByPost])
+    // No fetch here: the post page already calls setCommentsByPost for this
+    // postId, and doing it in both places issued the same query twice on every
+    // post open. This component only reads the count.
 
     const toggleSave = useCallback(async () => {
         if (!userId) {

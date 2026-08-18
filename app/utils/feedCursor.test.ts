@@ -4,6 +4,7 @@ import {
   decodeFeedCursor,
   encodeFeedCursor,
   nextFeedCursor,
+  toChronoCursor,
   toRpcCursor,
   type FeedCursor,
 } from './feedCursor'
@@ -21,13 +22,21 @@ describe('nextFeedCursor', () => {
       null,
       'sess',
       [
-        { id: 'a', score: '9.5' },
-        { id: 'b', score: '4.25' },
+        { id: 'a', score: '9.5', created_at: '2026-08-13T09:00:00.000Z' },
+        { id: 'b', score: '4.25', created_at: '2026-08-13T08:00:00.000Z' },
       ],
       START
     )
 
-    expect(cursor).toEqual({ v: 1, s: 'sess', p: 1, sc: '4.25', id: 'b', t: START })
+    expect(cursor).toEqual({
+      v: 1,
+      s: 'sess',
+      p: 1,
+      sc: '4.25',
+      ts: '2026-08-13T08:00:00.000Z',
+      id: 'b',
+      t: START,
+    })
   })
 
   it('increments the page counter across calls', () => {
@@ -57,11 +66,52 @@ describe('nextFeedCursor', () => {
   it('returns null when the last row has no id', () => {
     expect(nextFeedCursor(null, 'sess', [{ id: '', score: '1' }], START)).toBeNull()
   })
+
+  it('carries created_at, which is what the chronological feeds key on', () => {
+    // get_following_feed returns a constant 0 for score and keysets on
+    // (created_at, id). Without ts the client sent the string "0" as the
+    // timestamp, and the Following feed never got past its first page.
+    const cursor = nextFeedCursor(
+      null,
+      'sess',
+      [{ id: 'a', score: 0, created_at: '2026-08-13T09:30:00.000Z' }],
+      START
+    )
+
+    expect(cursor?.ts).toBe('2026-08-13T09:30:00.000Z')
+    expect(cursor?.sc).toBe('0')
+  })
+
+  it('leaves ts empty when the row has no created_at', () => {
+    const cursor = nextFeedCursor(null, 'sess', [{ id: 'a', score: '1' }], START)
+    expect(cursor?.ts).toBe('')
+  })
+})
+
+describe('toChronoCursor', () => {
+  it('sends the (created_at, id) keyset the chronological feeds read', () => {
+    const cursor: FeedCursor = {
+      v: 1, s: 'sess', p: 1, sc: '0', ts: '2026-08-13T09:00:00.000Z', id: 'abc', t: START,
+    }
+
+    expect(toChronoCursor(cursor)).toEqual({ ts: '2026-08-13T09:00:00.000Z', id: 'abc' })
+  })
+
+  it('maps a null cursor to null so the first page asks for no position', () => {
+    expect(toChronoCursor(null)).toBeNull()
+  })
+
+  it('refuses to send an empty timestamp', () => {
+    // Null means "first page", which is recoverable. An empty or non-timestamp
+    // ts is a hard cast error inside the RPC.
+    const cursor: FeedCursor = { v: 1, s: 'sess', p: 1, sc: '0', ts: '', id: 'abc', t: START }
+    expect(toChronoCursor(cursor)).toBeNull()
+  })
 })
 
 describe('toRpcCursor', () => {
   it('sends only the three fields get_feed reads', () => {
-    const cursor: FeedCursor = { v: 1, s: 'sess', p: 3, sc: '2.5', id: 'abc', t: START }
+    const cursor: FeedCursor = { v: 1, s: 'sess', p: 3, sc: '2.5', ts: START, id: 'abc', t: START }
     expect(toRpcCursor(cursor)).toEqual({ s: 'sess', sc: '2.5', id: 'abc' })
   })
 
@@ -71,7 +121,7 @@ describe('toRpcCursor', () => {
 })
 
 describe('decodeFeedCursor', () => {
-  const valid: FeedCursor = { v: 1, s: 'sess', p: 2, sc: '3.5', id: 'abc', t: START }
+  const valid: FeedCursor = { v: 1, s: 'sess', p: 2, sc: '3.5', ts: START, id: 'abc', t: START }
 
   it('round-trips a cursor it wrote', () => {
     expect(decodeFeedCursor(encodeFeedCursor(valid), NOW)).toEqual(valid)

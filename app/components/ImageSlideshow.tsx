@@ -46,6 +46,19 @@ const ImageSlideshow = ({
   const [activeIndex, setActiveIndex] = useState<number>(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
+  /**
+   * Held in a ref so the advance timer below does not depend on it.
+   *
+   * Callers pass an inline arrow (`() => onVideoEnded(post.id)`), which is a new
+   * function on every parent render -- and the timer effect used to depend on
+   * it, so any unrelated re-render restarted the 3s countdown and a photo post
+   * could sit on slide 1 indefinitely.
+   */
+  const onCycleCompleteRef = useRef(onCycleComplete)
+  useEffect(() => {
+    onCycleCompleteRef.current = onCycleComplete
+  }, [onCycleComplete])
+
   const slides = useMemo(() => {
     if (imageUrls.length > 0) {
       return imageUrls
@@ -74,25 +87,26 @@ const ImageSlideshow = ({
     setActiveIndex((current) => (current >= slides.length - 1 ? 0 : current + 1))
   }, [slides.length])
 
-  const advanceFromTimer = useCallback(() => {
-    const isLastSlide = activeIndex >= slides.length - 1
-
-    if (isLastSlide) {
-      onCycleComplete?.()
-    }
-
-    setActiveIndex(isLastSlide ? 0 : activeIndex + 1)
-  }, [activeIndex, onCycleComplete, slides.length])
-
   useEffect(() => {
     if (!autoPlay || slides.length < 1) {
       return
     }
 
     const safeSpeed = speed > 0 ? speed : 1
-    const timer = window.setTimeout(advanceFromTimer, slideDurationMs / safeSpeed)
+    const timer = window.setTimeout(() => {
+      setActiveIndex((current) => {
+        const isLastSlide = current >= slides.length - 1
+        if (isLastSlide) {
+          onCycleCompleteRef.current?.()
+        }
+        return isLastSlide ? 0 : current + 1
+      })
+    }, slideDurationMs / safeSpeed)
+
     return () => window.clearTimeout(timer)
-  }, [advanceFromTimer, autoPlay, slideDurationMs, slides.length, speed])
+    // activeIndex is a dependency so each slide gets its own interval; nothing
+    // else here changes per render.
+  }, [activeIndex, autoPlay, slideDurationMs, slides.length, speed])
 
   useEffect(() => {
     const audio = audioRef.current

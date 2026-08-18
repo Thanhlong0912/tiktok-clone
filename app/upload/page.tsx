@@ -51,6 +51,7 @@ const Upload = () => {
     let [uploadProgress, setUploadProgress] = useState<number>(0);
     let [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
     const [videoMeta, setVideoMeta] = useState<VideoMetadata | null>(null);
+    const [isVideoTooLong, setIsVideoTooLong] = useState<boolean>(false);
     const [coverOptions, setCoverOptions] = useState<Array<{ file: File; url: string }>>([]);
     const [coverIndex, setCoverIndex] = useState<number>(0);
     const [isPreparingCover, setIsPreparingCover] = useState<boolean>(false);
@@ -104,10 +105,15 @@ const Upload = () => {
         setVideoDisplay(URL.createObjectURL(file))
         setVideoFile(file)
         setError(null)
+        setIsVideoTooLong(false)
 
         // Duration was never checked, despite the drop zone promising a limit.
         const meta = await readVideoMetadata(file)
         if (meta && meta.durationMs > MAX_VIDEO_DURATION_MS) {
+            // Recorded in state, not just as an error message. validate() clears
+            // `error` before re-checking and only ever looked at file presence,
+            // so an over-length video showed the warning and then posted anyway.
+            setIsVideoTooLong(true)
             setError({ type: 'File', message: `Videos must be shorter than ${MAX_VIDEO_DURATION_LABEL}` })
             return
         }
@@ -272,8 +278,20 @@ const Upload = () => {
     }
 
     const discard = () => {
+        // Object urls and cover frames were left behind here, so discarding and
+        // re-picking leaked a blob per attempt and could post the previous
+        // clip's cover with the new video.
+        if (videoDisplay) URL.revokeObjectURL(videoDisplay)
+        imageDisplays.forEach((imageUrl) => URL.revokeObjectURL(imageUrl))
+        if (audioDisplay) URL.revokeObjectURL(audioDisplay)
+        coverOptions.forEach((option) => URL.revokeObjectURL(option.url))
+
         setVideoDisplay('')
         setVideoFile(null)
+        setVideoMeta(null)
+        setIsVideoTooLong(false)
+        setCoverOptions([])
+        setCoverIndex(0)
         setImageDisplays([])
         setImageFiles([])
         setAudioFile(null)
@@ -287,6 +305,7 @@ const Upload = () => {
         setVideoDisplay('')
         setVideoFile(null)
         setVideoMeta(null)
+        setIsVideoTooLong(false)
         // Object URLs for the cover thumbnails leak until revoked.
         coverOptions.forEach((option) => URL.revokeObjectURL(option.url))
         setCoverOptions([])
@@ -309,6 +328,9 @@ const Upload = () => {
 
         if (uploadMode === 'video' && !videoFile) {
             setError({ type: 'File', message: 'A video is required'})
+            isError = true
+        } else if (uploadMode === 'video' && isVideoTooLong) {
+            setError({ type: 'File', message: `Videos must be shorter than ${MAX_VIDEO_DURATION_LABEL}`})
             isError = true
         } else if (uploadMode === 'images' && imageFiles.length < 1) {
             setError({ type: 'File', message: 'At least 1 image is required'})
@@ -464,12 +486,18 @@ const Upload = () => {
                                 <p className="mt-12 text-ink-soft text-sm">MP4</p>
                                 <p className="mt-2 text-ink-soft text-[13px]">Up to 10 minutes</p>
                                 <p className="mt-2 text-ink-soft text-[13px]">Less than 200 MB</p>
-                                <label
-                                    htmlFor="videoInput"
-                                    className="px-2 py-1.5 mt-8 text-white text-[15px] w-[80%] bg-[#F02C56] rounded-sm cursor-pointer"
+                                {/*
+                                  A <span>, not a second <label htmlFor="videoInput">
+                                  nested inside the first: nesting two labels for
+                                  the same input is invalid HTML and made some
+                                  browsers open the file picker twice. The outer
+                                  label already forwards the click.
+                                */}
+                                <span
+                                    className="px-2 py-1.5 mt-8 text-center text-white text-[15px] w-[80%] bg-tiktok rounded-sm"
                                 >
                                     Select file
-                                </label>
+                                </span>
                                 <input
                                     type="file"
                                     id="videoInput"
@@ -604,12 +632,12 @@ const Upload = () => {
                                 <p className="mt-12 text-ink-soft text-sm">JPG, PNG, WEBP</p>
                                 <p className="mt-2 text-ink-soft text-[13px]">Vertical or horizontal</p>
                                 <p className="mt-2 text-ink-soft text-[13px]">Up to 5 seconds per image</p>
-                                <label
-                                    htmlFor="imageInput"
-                                    className="px-2 py-1.5 mt-8 text-white text-[15px] w-[80%] bg-[#F02C56] rounded-sm cursor-pointer"
+                                {/* Same nested-label fix as the video drop zone above. */}
+                                <span
+                                    className="px-2 py-1.5 mt-8 text-center text-white text-[15px] w-[80%] bg-tiktok rounded-sm"
                                 >
                                     Select images
-                                </label>
+                                </span>
                                 <input
                                     type="file"
                                     id="imageInput"

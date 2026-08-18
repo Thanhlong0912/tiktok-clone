@@ -32,13 +32,20 @@ export interface NotificationCursor {
   id: string
 }
 
+/**
+ * `type` filters SERVER-side. The Activity page used to fetch one page and
+ * .filter() it per tab, so a burst of likes made the Comments and Followers
+ * tabs read "nothing yet" while their rows sat unreachable on page 2.
+ */
 export async function fetchNotifications(
   cursor: NotificationCursor | null,
-  limit = 30
+  limit = 30,
+  type: NotificationType | null = null
 ): Promise<NotificationItem[]> {
   const { data, error } = await supabase.rpc('get_notifications', {
     p_cursor: cursor,
     p_limit: limit,
+    p_type: type,
   })
   if (error) throw error
   return (data as NotificationItem[]) ?? []

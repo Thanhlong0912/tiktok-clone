@@ -26,7 +26,7 @@ const useSearchProfilesByName = async (name: string) => {
             image: profile?.image,
         }))
     } catch (error) {
-        console.log(error)
+        console.error(error)
         return []
     }
 }

@@ -15,14 +15,15 @@ import { usePostStore } from "@/app/stores/post"
 import { PostWithProfile, ProfilePageTypes } from "@/app/types"
 import { formatCount } from "@/app/utils/formatNumber"
 import { showToast } from "@/app/utils/toast"
+import Link from "next/link"
 import { useCallback, useEffect, useState } from "react"
-import { BsPencil } from "react-icons/bs"
+import { BsPencil, BsPerson } from "react-icons/bs"
 import { FiShare } from "react-icons/fi"
 
 
 const Profile = ({ params }: ProfilePageTypes) => {
     const contextUser = useUser()
-    let { postsByUser, setPostsByUser } = usePostStore()
+    let { postsByUser, setPostsByUser, clearUserPosts } = usePostStore()
     const { isEditProfileOpen, setIsEditProfileOpen, setIsLoginOpen } = useGeneralStore()
     const [followId, setFollowId] = useState<string | null>(null)
     type ProfileTab = 'posts' | 'liked' | 'saved' | 'reposts'
@@ -36,6 +37,11 @@ const Profile = ({ params }: ProfilePageTypes) => {
 
     const [summary, setSummary] = useState<ProfileSummary | null>(null)
     const [statsError, setStatsError] = useState<boolean>(false)
+    // get_profile returns no row for an id that is not a real account. Without
+    // this the header sat on its skeleton forever, indistinguishable from a
+    // slow load.
+    const [isProfileMissing, setIsProfileMissing] = useState<boolean>(false)
+    const [tabReloadKey, setTabReloadKey] = useState<number>(0)
 
     // One row from get_profile drives the whole header. The page previously
     // also pulled the same profile through useProfileStore, so every visit
@@ -57,7 +63,9 @@ const Profile = ({ params }: ProfilePageTypes) => {
             setStatsError(false)
             try {
                 const result = await fetchProfile(params.id)
-                if (active) setSummary(result)
+                if (!active) return
+                setSummary(result)
+                setIsProfileMissing(result === null)
             } catch (error) {
                 console.error(error)
                 if (active) setStatsError(true)
@@ -77,6 +85,24 @@ const Profile = ({ params }: ProfilePageTypes) => {
         checkFollow();
         setPostsByUser(params?.id)
     }, [contextUser?.user?.id, params?.id])
+
+    /**
+     * postsByUser is a single shared slot in the feed store, so navigating from
+     * one profile to another rendered the PREVIOUS creator's grid until the new
+     * fetch landed. Clearing on id change is what makes the skeleton honest.
+     *
+     * The tab caches are reset for the same reason.
+     */
+    useEffect(() => {
+        clearUserPosts()
+        setLikedPosts([])
+        setSavedPosts([])
+        setRepostedPosts([])
+        setSummary(null)
+        setIsProfileMissing(false)
+        setFollowId(null)
+        setActiveTab('posts')
+    }, [params?.id, clearUserPosts])
 
     useEffect(() => {
         const fetchTabPosts = async () => {
@@ -101,7 +127,10 @@ const Profile = ({ params }: ProfilePageTypes) => {
             }
         }
         fetchTabPosts()
-    }, [activeTab, params?.id])
+        // tabReloadKey is what makes "Try again" work: re-selecting the tab that
+        // is already active does not change activeTab, so the previous retry
+        // button could never re-run this effect.
+    }, [activeTab, params?.id, tabReloadKey])
 
     // Saved is private to the profile owner; snap back if the viewer changes.
     useEffect(() => {
@@ -158,6 +187,29 @@ const Profile = ({ params }: ProfilePageTypes) => {
             setIsFollowLoading(false)
         }
     }, [contextUser?.user?.id, followId, isFollowLoading, params?.id, setIsLoginOpen]);
+
+  if (isProfileMissing) {
+    return (
+      <MainLayout>
+        <div className="flex min-h-[70dvh] w-full flex-col items-center justify-center px-8 pt-[76px] text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-subtle text-ink-soft">
+            <BsPerson size={32} />
+          </div>
+          <p className="mt-5 text-[20px] font-bold text-ink">Account not found</p>
+          <p className="mt-2 max-w-xs text-[15px] text-ink-soft">
+            This account doesn&apos;t exist, or it may have been removed.
+          </p>
+          <Link
+            href="/explore"
+            className="mt-5 rounded-md bg-tiktok px-6 py-2.5 text-[15px] font-semibold text-white hover:bg-tiktok-hover"
+          >
+            Discover creators
+          </Link>
+        </div>
+        <MobileBottomNav />
+      </MainLayout>
+    )
+  }
 
   return (
     <>
@@ -239,22 +291,26 @@ const Profile = ({ params }: ProfilePageTypes) => {
                 </p>
             </ClientOnly>
 
-            <ul className="w-full flex items-center pt-4 border-b border-line">
+            {/* Buttons in a tablist, not <li onClick>: the old markup could not
+                be reached or activated by keyboard at all. */}
+            <div role="tablist" aria-label="Profile content" className="w-full flex items-center pt-4 border-b border-line">
                 {([
                     { id: 'posts' as const, label: 'Posts' },
                     { id: 'liked' as const, label: 'Liked' },
                     ...(isOwnProfile ? [{ id: 'saved' as const, label: 'Saved' }] : []),
                     { id: 'reposts' as const, label: 'Reposts' },
                 ]).map((tab) => (
-                    <li
+                    <button
                         key={tab.id}
+                        role="tab"
+                        aria-selected={activeTab === tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`w-60 text-center py-2 text-[17px] font-semibold cursor-pointer ${activeTab === tab.id ? 'border-b-2 border-b-ink text-ink' : 'text-ink-soft'}`}
+                        className={`w-60 text-center py-2 text-[17px] font-semibold transition-colors ${activeTab === tab.id ? 'border-b-2 border-b-ink text-ink' : 'text-ink-soft hover:text-ink'}`}
                     >
                         {tab.label}
-                    </li>
+                    </button>
                 ))}
-            </ul>
+            </div>
 
             <ClientOnly>
                 <div className="mt-4 grid 2xl:grid-cols-6 xl:grid-cols-5 lg:grid-cols-4 md:grid-cols-3 grid-cols-2 gap-3">
@@ -266,7 +322,7 @@ const Profile = ({ params }: ProfilePageTypes) => {
                         <div className="col-span-full py-8 text-center">
                             <p className="text-[15px] font-semibold text-ink">Could not load these posts.</p>
                             <button
-                                onClick={() => setActiveTab(activeTab)}
+                                onClick={() => setTabReloadKey((key) => key + 1)}
                                 className="mt-3 rounded-full bg-tiktok px-5 py-2 text-sm font-semibold text-white hover:bg-tiktok-hover"
                             >
                                 Try again

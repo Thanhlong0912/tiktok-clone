@@ -23,7 +23,7 @@ Two rules hold for anything added to that file:
 This app uses Supabase for Postgres, Auth and Storage. Before running it:
 
 1. **Run the schema.** Paste each file in `supabase/migrations/` into the
-   Supabase SQL editor in order and run it. All four are idempotent.
+   Supabase SQL editor in order and run it. All of them are idempotent.
    - `0001_init.sql` — the seven base tables, RLS, the `handle_new_user`
      trigger, and the public `media` storage bucket.
    - `0002_feed_and_signals.sql` — denormalized counters maintained by
@@ -33,6 +33,12 @@ This app uses Supabase for Postgres, Auth and Storage. Before running it:
    - `0003_feed_rpcs.sql` — the feed, discovery, signal-recording and reporting
      functions, plus the `pg_cron` jobs that refresh ranking scores.
    - `0004_rls_initplan_and_fk_indexes.sql` — performance follow-ups.
+   - `0005_post_captions.sql` — creator-supplied subtitle tracks.
+   - `0006_hardening.sql` — **required.** Scopes the storage write policies to
+     the object's owner (without it, any signed-in user can delete anyone's
+     media), restricts UPDATE to the columns users may actually edit (without
+     it, anyone can write their own engagement counters, which feed ranking),
+     and adds the notification type filter the Activity tabs use.
 2. **Upload the default avatar.** In Storage → `media`, upload an image named exactly `placeholder-avatar.png`. New profiles point at it until the user picks their own picture. The name must match `NEXT_PUBLIC_PLACEHOLDER_DEAFULT_IMAGE_ID` in `.env` and the default in `handle_new_user()` — extension included.
 3. **Disable email confirmation.** Auth → Providers → Email → turn off "Confirm email", so registering signs the user in straight away. If you leave it on, registration will ask the user to confirm their address first.
 4. **Fill in `.env`.** Copy `.env.example` to `.env` and set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from Project settings → API.

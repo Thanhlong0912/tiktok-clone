@@ -1,12 +1,15 @@
 import { supabase } from "@/libs/supabase"
 
-const useUpdateProfileImage = async (id: string, image: string) => {
-    const { error } = await supabase
+/** Same user_id / id distinction as useUpdateProfile -- see the note there. */
+const useUpdateProfileImage = async (userId: string, image: string) => {
+    const { data, error } = await supabase
         .from('profiles')
         .update({ image: image })
-        .eq('id', id)
+        .eq('user_id', userId)
+        .select('user_id')
 
     if (error) throw error
+    if (!data || data.length < 1) throw new Error('Profile not found')
 }
 
 export default useUpdateProfileImage

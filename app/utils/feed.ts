@@ -1,5 +1,5 @@
 import { supabase } from '@/libs/supabase'
-import { toRpcCursor, type FeedCursor } from './feedCursor'
+import { toChronoCursor, toRpcCursor, type FeedCursor } from './feedCursor'
 import type { PostWithProfile } from '../types'
 
 /**
@@ -94,8 +94,11 @@ export async function fetchFeed(
   limit = 8
 ): Promise<PostWithProfile[]> {
   if (kind === 'following') {
+    // (created_at, id), NOT (score, id): get_following_feed is chronological and
+    // returns a constant 0 for score. Sending cursor.sc here meant handing the
+    // string "0" to a ::timestamptz cast, so page 2 never arrived.
     const { data, error } = await supabase.rpc('get_following_feed', {
-      p_cursor: cursor ? { ts: cursor.sc, id: cursor.id } : null,
+      p_cursor: toChronoCursor(cursor),
       p_limit: limit,
     })
     if (error) throw error
@@ -237,6 +240,39 @@ export async function reportContent(
   })
   if (error) throw error
   return (data as string) ?? null
+}
+
+/**
+ * Blocks are enforced in every feed, search, profile and notification RPC, but
+ * nothing in the UI ever wrote to the table -- so the whole mechanism could only
+ * ever operate on an empty set. RLS scopes the row to the blocker, which is also
+ * what stops the blocked user discovering they were blocked.
+ */
+export async function blockUser(userId: string): Promise<void> {
+  const { data: auth } = await supabase.auth.getUser()
+  const blockerId = auth.user?.id
+  if (!blockerId) throw new Error('You must be logged in to block someone')
+  if (blockerId === userId) throw new Error('You cannot block yourself')
+
+  const { error } = await supabase
+    .from('blocks')
+    .upsert({ blocker_id: blockerId, blocked_id: userId }, { onConflict: 'blocker_id,blocked_id' })
+
+  if (error) throw error
+}
+
+export async function unblockUser(userId: string): Promise<void> {
+  const { data: auth } = await supabase.auth.getUser()
+  const blockerId = auth.user?.id
+  if (!blockerId) return
+
+  const { error } = await supabase
+    .from('blocks')
+    .delete()
+    .eq('blocker_id', blockerId)
+    .eq('blocked_id', userId)
+
+  if (error) throw error
 }
 
 export interface TrendingHashtag {

@@ -1,9 +1,12 @@
 import ClientOnly from '@/app/components/ClientOnly'
 import { useUser } from '@/app/context/user'
 import { useGeneralStore } from '@/app/stores/general'
+import { usePostStore } from '@/app/stores/post'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import useGetFollowing from '@/app/hooks/useGetFollowing'
+import { RandomUsers } from '@/app/types'
 import { AiFillHome, AiOutlineHome } from 'react-icons/ai'
 import { BsPerson, BsPersonFill } from 'react-icons/bs'
 import { IoCompass, IoCompassOutline } from 'react-icons/io5'
@@ -17,15 +20,41 @@ const SideNavMain = () => {
   const contextUser = useUser()
   const pathname = usePathname()
   const router = useRouter()
+  const feedKind = usePostStore((state) => state.feedKind)
+  const [followingUsers, setFollowingUsers] = useState<RandomUsers[]>([])
 
   useEffect(() => { setRandomUsers() }, [])
 
-  const requireAuth = (action: () => void) => {
+  useEffect(() => {
+    const userId = contextUser?.user?.id
+    if (!userId) {
+      setFollowingUsers([])
+      return
+    }
+
+    let active = true
+    useGetFollowing(userId).then((users) => { if (active) setFollowingUsers(users) })
+
+    return () => { active = false }
+  }, [contextUser?.user?.id])
+
+  /**
+   * Switches the store directly instead of relying on the ?feed=following push
+   * alone: from the home page that is a same-route navigation, which used to
+   * leave this link doing nothing at all. The push still happens so the URL
+   * stays shareable and the back button works.
+   */
+  const goToFollowingFeed = () => {
     if (!contextUser?.user?.id) {
       useGeneralStore.getState().setIsLoginOpen(true)
       return
     }
-    action()
+
+    usePostStore.getState().setFeedKind('following')
+
+    if (pathname !== '/') {
+      router.push('/?feed=following')
+    }
   }
 
   return (
@@ -43,7 +72,11 @@ const SideNavMain = () => {
           href="/"
           icon={AiOutlineHome}
           iconActive={AiFillHome}
-          active={pathname === '/'}
+          active={pathname === '/' && feedKind !== 'following'}
+          onClick={() => {
+            usePostStore.getState().setFeedKind('for-you')
+            if (pathname !== '/') router.push('/')
+          }}
         />
         <MenuItem
           label="Explore"
@@ -57,7 +90,8 @@ const SideNavMain = () => {
           href="/"
           icon={RiUserFollowLine}
           iconActive={RiUserFollowFill}
-          onClick={() => router.push('/?feed=following')}
+          active={pathname === '/' && feedKind === 'following'}
+          onClick={goToFollowingFeed}
         />
         {contextUser?.user?.id ? (
           <MenuItem
@@ -103,7 +137,12 @@ const SideNavMain = () => {
           See all
         </Link>
 
-        {contextUser?.user?.id ? (
+        {/*
+          Real follows now. This section used to render the same trending
+          creators as "Suggested accounts" above it, under a heading that
+          promised the opposite -- and it rendered even when you followed nobody.
+        */}
+        {contextUser?.user?.id && followingUsers.length > 0 ? (
           <div>
             <h3 className="hidden px-2 pb-2 pt-4 text-[13px] font-semibold text-ink-soft lg:block">
               Following accounts
@@ -111,12 +150,15 @@ const SideNavMain = () => {
             <div className="block pt-3 lg:hidden" />
             <ClientOnly>
               <div className="cursor-pointer">
-                {randomUsers?.map((user, index) => (
-                  <MenuItemFollow key={index} user={user} />
+                {followingUsers.map((user) => (
+                  <MenuItemFollow key={user.id} user={user} />
                 ))}
               </div>
             </ClientOnly>
-            <button className="hidden pl-2 pt-1.5 text-[13px] font-semibold text-tiktok lg:block">
+            <button
+              onClick={goToFollowingFeed}
+              className="hidden pl-2 pt-1.5 text-[13px] font-semibold text-tiktok lg:block"
+            >
               See more
             </button>
           </div>

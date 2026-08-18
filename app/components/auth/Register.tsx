@@ -66,7 +66,7 @@ const Register = () => {
         setIsLoginOpen(false)
         router.refresh()
     } catch (error) {
-        console.log(error)
+        console.error(error)
         setLoading(false)
         const message = (error as { message?: string })?.message
         setError({

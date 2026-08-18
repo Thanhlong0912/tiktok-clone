@@ -24,21 +24,32 @@ interface PostStore {
     allPosts: PostWithProfile[];
     postsByUser: PostWithProfile[];
     postById: PostWithProfile | null;
+    /**
+     * 'missing' is what lets the detail page tell a deleted or bogus permalink
+     * apart from one that is still loading -- both used to render postById as
+     * null, so a dead link spun forever.
+     */
+    postByIdStatus: 'idle' | 'loading' | 'ready' | 'missing';
 
     feedKind: FeedKind;
     isFeedLoading: boolean;
     isPageLoading: boolean;
     feedError: boolean;
+    /** A page request failed. Distinct from "reached the end" -- see hasMore. */
+    pageError: boolean;
     hasMore: boolean;
 
     setFeedKind: (kind: FeedKind) => void;
     setAllPosts: () => Promise<void>;
     loadMorePosts: () => Promise<void>;
+    retryLoadMore: () => Promise<void>;
     refreshFeed: () => Promise<void>;
     removePost: (postId: string) => void;
     patchPost: (postId: string, patch: Partial<PostWithProfile>) => void;
 
     setPostsByUser: (userId: string) => Promise<void>;
+    /** postsByUser is one shared slot; clear it when switching profiles. */
+    clearUserPosts: () => void;
     setPostById: (postId: string) => Promise<void>;
 }
 
@@ -60,17 +71,19 @@ export const usePostStore = create<PostStore>()(
         allPosts: [],
         postsByUser: [],
         postById: null,
+        postByIdStatus: 'idle',
 
         feedKind: 'for-you',
         isFeedLoading: false,
         isPageLoading: false,
         feedError: false,
+        pageError: false,
         hasMore: true,
 
         setFeedKind: (kind: FeedKind) => {
             if (get().feedKind === kind) return
             resetPaging()
-            set({ feedKind: kind, allPosts: [], hasMore: true, feedError: false })
+            set({ feedKind: kind, allPosts: [], hasMore: true, feedError: false, pageError: false })
             void get().setAllPosts()
         },
 
@@ -80,7 +93,7 @@ export const usePostStore = create<PostStore>()(
             if (get().allPosts.length > 0 && session) return
 
             resetPaging()
-            set({ isFeedLoading: true, feedError: false, hasMore: true })
+            set({ isFeedLoading: true, feedError: false, pageError: false, hasMore: true })
 
             try {
                 const posts = await fetchFeed(get().feedKind, null, session, PAGE_SIZE)
@@ -103,7 +116,7 @@ export const usePostStore = create<PostStore>()(
             // first request lands.
             if (inFlight) return inFlight
 
-            set({ isPageLoading: true })
+            set({ isPageLoading: true, pageError: false })
 
             inFlight = (async () => {
                 try {
@@ -131,7 +144,11 @@ export const usePostStore = create<PostStore>()(
                     })
                 } catch (error) {
                     console.error(error)
-                    set({ isPageLoading: false })
+                    // hasMore is cleared so the scroll handler stops re-firing
+                    // the same failing request on every scroll event, and
+                    // pageError distinguishes this from a genuine end of feed
+                    // so the UI can offer a retry instead of "all caught up".
+                    set({ isPageLoading: false, hasMore: false, pageError: true })
                 } finally {
                     inFlight = null
                 }
@@ -140,9 +157,14 @@ export const usePostStore = create<PostStore>()(
             return inFlight
         },
 
+        retryLoadMore: async () => {
+            set({ hasMore: true, pageError: false })
+            await get().loadMorePosts()
+        },
+
         refreshFeed: async () => {
             resetPaging()
-            set({ allPosts: [], hasMore: true, feedError: false })
+            set({ allPosts: [], hasMore: true, feedError: false, pageError: false })
             await get().setAllPosts()
         },
 
@@ -163,13 +185,29 @@ export const usePostStore = create<PostStore>()(
             set({ postsByUser: result });
         },
 
-        setPostById: async (postId: string) => {
-            // Show the copy we already have while the fresh one loads.
-            const local = get().allPosts.filter((post) => post.id === postId)[0]
-            if (local) set({ postById: local })
+        clearUserPosts: () => set({ postsByUser: [] }),
 
-            const result = await fetchPost(postId)
-            set({ postById: result })
+        setPostById: async (postId: string) => {
+            // Show the copy we already have while the fresh one loads. Anything
+            // else is cleared: without this the previous post stayed on screen
+            // while the new one loaded.
+            const local =
+                get().allPosts.filter((post) => post.id === postId)[0] ??
+                get().postsByUser.filter((post) => post.id === postId)[0] ??
+                null
+
+            set({ postById: local, postByIdStatus: 'loading' })
+
+            try {
+                const result = await fetchPost(postId)
+                set({
+                    postById: result,
+                    postByIdStatus: result ? 'ready' : 'missing',
+                })
+            } catch (error) {
+                console.error(error)
+                set({ postByIdStatus: 'missing' })
+            }
         },
     }))
 )

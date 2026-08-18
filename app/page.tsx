@@ -3,13 +3,15 @@
 import { useUser } from "@/app/context/user"
 import { useGeneralStore } from "@/app/stores/general"
 import { usePostStore } from "@/app/stores/post"
-import { TouchEvent, UIEvent, useCallback, useEffect, useRef, useState } from "react"
+import { Suspense, TouchEvent, UIEvent, useCallback, useEffect, useRef, useState } from "react"
+import SearchParamReader from "./components/SearchParamReader"
 import { BsChevronDown, BsChevronUp } from "react-icons/bs"
 import ClientOnly from "./components/ClientOnly"
 import PostMain from "./components/PostMain"
 import PostSkeleton from "./components/PostSkeleton"
 import MobileBottomNav from "./components/MobileBottomNav"
 import MainLayout from "./layouts/MainLayout"
+import ThemeToggle from "./layouts/includes/ThemeToggle"
 import {
   getVideoAutoScrollEnabled,
   setVideoAutoScrollEnabled,
@@ -54,17 +56,25 @@ export default function Home() {
     isFeedLoading,
     isPageLoading,
     feedError,
+    pageError,
     hasMore,
+    retryLoadMore,
   } = usePostStore();
 
   const mobileFeedTab: MobileFeedTab = feedKind === 'following' ? 'following' : 'for-you'
 
   useEffect(() => { void setAllPosts() }, [setAllPosts])
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('feed') === 'following' && user?.id) {
+  /**
+   * Reacts to ?feed=following.
+   *
+   * Driven by SearchParamReader rather than a one-off window.location read: the
+   * sidebar links to /?feed=following from the home page itself, and a
+   * same-route push does not remount anything, so the old effect never re-ran
+   * and the link did nothing at all.
+   */
+  const applyFeedParam = useCallback((value: string) => {
+    if (value === 'following' && user?.id) {
       setFeedKind('following')
     }
   }, [setFeedKind, user?.id])
@@ -332,8 +342,13 @@ export default function Home() {
 
   return (
     <>
+      {/* Renders nothing, so the Suspense boundary costs no prerendered markup. */}
+      <Suspense fallback={null}>
+        <SearchParamReader name="feed" onValue={applyFeedParam} />
+      </Suspense>
+
       <MainLayout>
-        <div className="fixed inset-x-0 top-0 z-30 flex items-center justify-center md:hidden px-6 pb-3 pt-[calc(env(safe-area-inset-top)+8px)] text-white">
+        <div className="fixed inset-x-0 top-0 z-30 flex items-center justify-center md:hidden px-4 pb-3 pt-[calc(env(safe-area-inset-top)+8px)] text-white">
           <div className="flex items-center gap-5 text-[17px] font-semibold drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]">
             <button onClick={switchToFollowing} className={`relative transition-opacity ${mobileFeedTab === 'following' ? 'opacity-100' : 'opacity-70'}`}>
               Following
@@ -348,6 +363,13 @@ export default function Home() {
               ) : null}
             </button>
           </div>
+
+          {/*
+            The top nav -- and with it the only theme control -- is hidden over
+            the mobile feed, so the toggle has to live here or a phone user
+            cannot reach it from the screen they spend all their time on.
+          */}
+          <ThemeToggle variant="overlay" className="absolute right-4" />
         </div>
 
         <MobileBottomNav variant="overlay" />
@@ -415,7 +437,24 @@ export default function Home() {
                   </div>
                 ) : null}
 
-                {!hasMore ? (
+                {/*
+                  A failed page and a finished feed both stop paging, but they
+                  are not the same thing to a viewer: one is retryable, the
+                  other is not.
+                */}
+                {pageError ? (
+                  <div className="flex h-32 snap-start items-center justify-center px-8 text-center text-sm text-white/70 md:text-ink-soft">
+                    <div>
+                      <p>Couldn&apos;t load more videos.</p>
+                      <button
+                        onClick={() => void retryLoadMore()}
+                        className="mt-3 rounded-full bg-tiktok px-5 py-2 text-sm font-semibold text-white hover:bg-tiktok-hover"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  </div>
+                ) : !hasMore ? (
                   <div className="flex h-32 snap-start items-center justify-center px-8 text-center text-sm text-white/70 md:text-ink-soft">
                     <div>
                       <p>You are all caught up.</p>

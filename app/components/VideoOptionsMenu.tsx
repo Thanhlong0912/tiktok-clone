@@ -11,12 +11,13 @@ import {
   MdHd,
   MdOutlineClosedCaption,
   MdOutlineSpeed,
+  MdPersonOff,
   MdPictureInPictureAlt,
 } from 'react-icons/md'
 import AutoScrollToggle from './AutoScrollToggle'
 import ReasonSheet from './ReasonSheet'
 import { showToast } from '../utils/toast'
-import { markNotInterested, reportContent, REPORT_REASONS, type ReportReason } from '../utils/feed'
+import { blockUser, markNotInterested, reportContent, REPORT_REASONS, type ReportReason } from '../utils/feed'
 import { useUser } from '../context/user'
 import { useGeneralStore } from '../stores/general'
 import {
@@ -88,6 +89,7 @@ const VideoOptionsMenu = ({
   const [speed, setSpeed] = useState<PlaybackSpeed>(1)
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false)
   const [isReporting, setIsReporting] = useState<boolean>(false)
+  const [isBlocking, setIsBlocking] = useState<boolean>(false)
   const { user } = useUser() || {}
   const { setIsLoginOpen } = useGeneralStore()
 
@@ -177,6 +179,35 @@ const VideoOptionsMenu = ({
     }
 
     setIsReportOpen(true)
+  }
+
+  /**
+   * Blocks are already filtered out of every feed, search, profile and
+   * notification RPC -- this is the write side those filters never had, so the
+   * table could only ever be empty.
+   */
+  const handleBlock = async () => {
+    changeMenuOpen(false)
+
+    if (!user?.id) {
+      setIsLoginOpen(true)
+      return
+    }
+    if (!postUserId || isBlocking) return
+
+    setIsBlocking(true)
+    try {
+      await blockUser(postUserId)
+      showToast('Blocked. You will not see their videos again.')
+      // Same removal path as Not interested: the card is filtered server-side
+      // from here on, but the copy already on screen has to go now.
+      onNotInterested?.(postId ?? '')
+    } catch (error) {
+      console.error(error)
+      showToast((error as Error)?.message || 'Could not block this account', 'error')
+    } finally {
+      setIsBlocking(false)
+    }
   }
 
   const submitReport = async (reason: string) => {
@@ -417,6 +448,23 @@ const VideoOptionsMenu = ({
                       <MdBlock size={16} />
                       Not interested
                     </button>
+
+                    {/* Only for someone else's video: blocking yourself is
+                        rejected by a check constraint anyway. */}
+                    {postUserId && user?.id !== postUserId ? (
+                      <button
+                        role="menuitem"
+                        disabled={isBlocking}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          handleBlock()
+                        }}
+                        className={`${rowClassName} disabled:opacity-60`}
+                      >
+                        <MdPersonOff size={17} />
+                        Block this account
+                      </button>
+                    ) : null}
 
                     <button
                       role="menuitem"
