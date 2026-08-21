@@ -23,7 +23,7 @@ export default function Home() {
   type MobileFeedTab = 'for-you' | 'following'
   const MOBILE_WINDOW_RADIUS = 2
   const { user } = useUser() || {}
-  const { setIsLoginOpen } = useGeneralStore()
+  const { setIsLoginOpen, setIsFeedCommentsOpen } = useGeneralStore()
   const [isMobileViewport, setIsMobileViewport] = useState<boolean>(false)
   const [mobileViewportHeight, setMobileViewportHeight] = useState<number>(0)
   const [mobileVisibleIndex, setMobileVisibleIndex] = useState<number>(0)
@@ -64,6 +64,11 @@ export default function Home() {
   const mobileFeedTab: MobileFeedTab = feedKind === 'following' ? 'following' : 'for-you'
 
   useEffect(() => { void setAllPosts() }, [setAllPosts])
+
+  // The comments panel is feed-scoped state living in a store that outlives the
+  // route, so drop it on the way out -- otherwise coming back from a profile or
+  // a post detail reopens comments the viewer never asked for.
+  useEffect(() => () => setIsFeedCommentsOpen(false), [setIsFeedCommentsOpen])
 
   /**
    * Reacts to ?feed=following.

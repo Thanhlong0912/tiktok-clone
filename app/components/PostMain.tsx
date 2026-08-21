@@ -74,7 +74,13 @@ const PostMain = ({
   onFloatingPlayerChange,
 }: PostMainCompTypes) => {
   const { user } = useUser() || {}
-  const { setIsLoginOpen } = useGeneralStore()
+  const {
+    setIsLoginOpen,
+    isFeedCommentsOpen,
+    setIsFeedCommentsOpen,
+    activeFeedPostId,
+    setActiveFeedPostId,
+  } = useGeneralStore()
   const router = useRouter()
 
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -82,6 +88,11 @@ const PostMain = ({
   const tapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastTapRef = useRef<number>(0)
   const commentInputRef = useRef<HTMLInputElement | null>(null)
+  // Only the card the viewer actually clicked should pull focus into the input.
+  // Without this, every swipe with the panel open would refocus (and on mobile
+  // reopen the keyboard) on whichever card scrolled into place. A ref, not
+  // state: clearing it must not re-run the focus effect and cancel its timer.
+  const pendingCommentFocusRef = useRef<boolean>(false)
   const isOpeningPostDetailRef = useRef<boolean>(false)
 
   const [followId, setFollowId] = useState<string | null>(post.is_following ? 'known' : null)
@@ -105,7 +116,6 @@ const PostMain = ({
   const [isRepostLoading, setIsRepostLoading] = useState<boolean>(false)
 
   const [comments, setComments] = useState<CommentWithProfile[]>([])
-  const [isCommentsSheetOpen, setIsCommentsSheetOpen] = useState<boolean>(false)
   const [isCommentsLoading, setIsCommentsLoading] = useState<boolean>(false)
   const [hasLoadedComments, setHasLoadedComments] = useState<boolean>(false)
   const [commentInput, setCommentInput] = useState<string>('')
@@ -264,6 +274,7 @@ const PostMain = ({
 
         if (entries[0].isIntersecting) {
           setIsMediaActive(true)
+          setActiveFeedPostId(post.id)
           feedWatchSession.start(post.id)
 
           if (postIsImage || !activeVideo || isOpeningPostDetailRef.current) {
@@ -323,7 +334,7 @@ const PostMain = ({
         observer.unobserve(postMainElement)
       }
     }
-  }, [post.id, postIsImage])
+  }, [post.id, postIsImage, setActiveFeedPostId])
 
   useEffect(() => {
     const postMainElement = postMainRef.current
@@ -703,6 +714,13 @@ const PostMain = ({
 
   // --------------------------------------------------------------- comments
 
+  /**
+   * The panel is open feed-wide, but only the active card draws it. That is
+   * what makes it follow the viewer from video to video instead of staying
+   * stuck on the card it was opened from.
+   */
+  const isCommentsSheetOpen = isFeedCommentsOpen && activeFeedPostId === post.id
+
   const loadComments = useCallback(async () => {
     setIsCommentsLoading(true)
     try {
@@ -718,34 +736,46 @@ const PostMain = ({
     }
   }, [post.id])
 
-  const openCommentsSheet = useCallback(async () => {
+  const openCommentsSheet = useCallback(() => {
     if (isCommentsSheetOpen) {
-      setIsCommentsSheetOpen(false)
+      setIsFeedCommentsOpen(false)
       return
     }
 
-    setIsCommentsSheetOpen(true)
-    // Comments are the one thing not carried on the post row -- fetched on
-    // demand rather than for all 8 posts of every page.
-    if (!hasLoadedComments) {
-      await loadComments()
-    }
-  }, [hasLoadedComments, isCommentsSheetOpen, loadComments])
+    pendingCommentFocusRef.current = true
+    setIsFeedCommentsOpen(true)
+  }, [isCommentsSheetOpen, setIsFeedCommentsOpen])
+
+  /**
+   * Comments are the one thing not carried on the post row, so they are fetched
+   * on demand rather than for all 8 posts of every page. Keying this off the
+   * panel being visible -- rather than off the click that opened it -- is what
+   * loads the next video's thread when the viewer scrolls with the panel open.
+   */
+  useEffect(() => {
+    if (!isCommentsSheetOpen || hasLoadedComments || isCommentsLoading) return
+
+    void loadComments()
+  }, [hasLoadedComments, isCommentsLoading, isCommentsSheetOpen, loadComments])
 
   useEffect(() => {
     if (!isCommentsSheetOpen) return
 
-    const timer = setTimeout(() => commentInputRef.current?.focus(), 80)
-
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsCommentsSheetOpen(false)
+      if (event.key === 'Escape') setIsFeedCommentsOpen(false)
     }
     document.addEventListener('keydown', onKey)
 
-    return () => {
-      clearTimeout(timer)
-      document.removeEventListener('keydown', onKey)
-    }
+    return () => document.removeEventListener('keydown', onKey)
+  }, [isCommentsSheetOpen, setIsFeedCommentsOpen])
+
+  useEffect(() => {
+    if (!isCommentsSheetOpen || !pendingCommentFocusRef.current) return
+
+    pendingCommentFocusRef.current = false
+    const timer = setTimeout(() => commentInputRef.current?.focus(), 80)
+
+    return () => clearTimeout(timer)
   }, [isCommentsSheetOpen])
 
   const submitInlineComment = useCallback(async () => {
@@ -823,9 +853,14 @@ const PostMain = ({
       data-feed-index={feedIndex}
       className="snap-start h-[100dvh] md:flex md:h-[calc(100vh-60px)] md:items-center md:justify-center"
     >
+      {/*
+        Every card makes room for the drawer, not just the active one: the panel
+        stays put while the feed scrolls under it, so a card that shifted only
+        once it became active would slide sideways mid-scroll.
+      */}
       <div
         className={`flex h-full w-full md:h-auto md:w-auto md:items-end md:gap-3 md:py-4 ${
-          isCommentsSheetOpen ? 'md:lg:pr-[420px]' : ''
+          isFeedCommentsOpen ? 'md:lg:pr-[420px]' : ''
         }`}
       >
         {/* Media card. Full-bleed on mobile, a 9:16 rounded card on desktop. */}
@@ -1120,7 +1155,7 @@ const PostMain = ({
       {isCommentsSheetOpen ? (
         <div className="fixed inset-0 z-[70] flex items-end bg-black/45 md:inset-auto md:bottom-0 md:right-0 md:top-[60px] md:block md:bg-transparent">
           <button
-            onClick={() => setIsCommentsSheetOpen(false)}
+            onClick={() => setIsFeedCommentsOpen(false)}
             aria-label="Close comments"
             className="absolute inset-0 md:hidden"
           />
@@ -1136,7 +1171,7 @@ const PostMain = ({
                 {commentsCount} comments
               </p>
               <button
-                onClick={() => setIsCommentsSheetOpen(false)}
+                onClick={() => setIsFeedCommentsOpen(false)}
                 className="rounded-full bg-surface-subtle p-1 md:p-2"
                 aria-label="Close comments"
               >
