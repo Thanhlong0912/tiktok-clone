@@ -99,6 +99,11 @@ This app uses Supabase for Postgres, Auth and Storage. Before running it:
      This one is not optional and not deferrable. The comment section calls
      `get_post_comments` on every post; until the file is run, every thread in
      the app renders its error state.
+   - `0008_posts_column_grants.sql` — **required.** Closes the INSERT half of
+     what 0006 closed for UPDATE: without it a client can publish a post that
+     arrives with its engagement counters already set, which is the same feed
+     manipulation one statement earlier. It restates 0006's UPDATE grant as
+     well, so it is correct on a database where 0006 never ran.
 2. **Upload the default avatar.** In Storage → `media`, upload an image named exactly `placeholder-avatar.png`. New profiles point at it until the user picks their own picture. The name must match `NEXT_PUBLIC_PLACEHOLDER_DEAFULT_IMAGE_ID` in `.env` and the default in `handle_new_user()` — extension included.
 3. **Disable email confirmation.** Auth → Providers → Email → turn off "Confirm email", so registering signs the user in straight away. If you leave it on, registration will ask the user to confirm their address first.
 4. **Fill in `.env`.** Copy `.env.example` to `.env` and set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from Project settings → API.
