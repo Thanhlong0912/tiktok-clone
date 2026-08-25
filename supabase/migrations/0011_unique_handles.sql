@@ -489,3 +489,399 @@ revoke execute on function public.notify_comment_mentions() from public, anon, a
 -- exists. mention_key itself stays -- it normalises tokens -- but nothing
 -- looks a profile up by it any more.
 drop index if exists public.profiles_mention_key_idx;
+
+-- ---------------------------------------------------------------------------
+-- 8. The ten RETURNS TABLE functions gain a handle column.
+--
+-- Every other function touched by this migration could use CREATE OR REPLACE
+-- and keep its existing grants, because REPLACE is only disallowed when the
+-- return type changes. These ten all return TABLE(...), and appending a
+-- column to that list IS a return-type change -- Postgres rejects it with
+-- "cannot change return type of existing function". So each one is DROPped
+-- and recreated from scratch instead of replaced in place.
+--
+-- That has one immediate consequence for every function on this list: DROP
+-- removes the pg_proc row, and the row is what the ACL (proacl) lives on.
+-- Recreating the function does not restore the old grants -- it creates a
+-- fresh row with Postgres's default privilege, which is EXECUTE granted to
+-- PUBLIC. Because every authenticated request and every anonymous request is
+-- also, trivially, PUBLIC, a bare drop/recreate silently turns three
+-- authenticated-only functions (get_blocked_accounts, get_muted_accounts,
+-- get_notifications -- each of which answers with data scoped to the caller)
+-- back into public-readable ones. That is the exact failure 0006's history
+-- warns about. The fix is the same discipline used everywhere else in this
+-- file: every drop/create pair below is immediately followed by its own
+-- revoke/grant, restated rather than assumed.
+--
+-- Definitions are pg_get_functiondef output, reproduced verbatim (modulo
+-- keyword casing and $$ in place of $function$, to match this file's style)
+-- with exactly two edits per function: the new column on RETURNS TABLE, and
+-- the matching expression on the select list, both appended at the end so
+-- neither disturbs the existing column order client code already depends on.
+-- get_trending_creators needs a third edit -- pr.handle added to its GROUP
+-- BY, since it is the one function here that aggregates -- and search_users
+-- needs a fourth: its WHERE now also matches on handle.
+--
+-- Every predicate that stood in for RLS in the previous body (deleted_at is
+-- null, the blocks/mutes not-exists checks, the auth.uid() scoping) is
+-- preserved exactly. These are SECURITY DEFINER functions, so those
+-- predicates -- not any RLS policy -- are the only thing standing between a
+-- caller and rows they should not see, and this section does not touch them.
+-- ---------------------------------------------------------------------------
+
+-- 8a. get_notifications. anon never reaches this function at all -- see its
+-- authenticated-only grant below -- but the body still checks v_uid is null
+-- and returns nothing, exactly as before.
+
+drop function if exists public.get_notifications(jsonb, integer, text);
+
+create or replace function public.get_notifications(p_cursor jsonb default null::jsonb, p_limit integer default 30, p_type text default null::text)
+returns table(id uuid, type text, created_at timestamp with time zone, read_at timestamp with time zone, actor_id uuid, actor_name text, actor_image text, post_id uuid, post_poster_key text, post_media text, preview text, actor_handle text)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_uid  uuid        := (select auth.uid());
+    v_ts   timestamptz := nullif(p_cursor->>'ts', '')::timestamptz;
+    v_id   uuid        := nullif(p_cursor->>'id', '')::uuid;
+    v_type text        := nullif(p_type, '');
+begin
+    if v_uid is null then
+        return;
+    end if;
+
+    -- Rejected rather than silently ignored: a typo in the tab name should not
+    -- quietly return the unfiltered list.
+    if v_type is not null and v_type not in ('like', 'comment', 'follow', 'repost', 'mention') then
+        raise exception 'unknown notification type %', v_type using errcode = '22023';
+    end if;
+
+    return query
+    select n.id, n.type, n.created_at, n.read_at,
+           n.actor_id, pr.name, pr.image,
+           n.post_id, coalesce(p.poster_key, ''), coalesce(p.video_url, ''), n.preview,
+           pr.handle
+    from public.notifications n
+    join public.profiles pr on pr.user_id = n.actor_id
+    left join public.posts p on p.id = n.post_id and p.deleted_at is null
+    where n.user_id = v_uid
+      and (v_type is null or n.type = v_type)
+      and not exists (select 1 from public.blocks b
+                       where b.blocker_id = v_uid and b.blocked_id = n.actor_id)
+      and (v_ts is null or (n.created_at, n.id) < (v_ts, v_id))
+    order by n.created_at desc, n.id desc
+    limit least(greatest(coalesce(p_limit, 30), 1), 50);
+end;
+$$;
+
+revoke execute on function public.get_notifications(jsonb, integer, text) from public, anon;
+grant  execute on function public.get_notifications(jsonb, integer, text) to authenticated;
+
+-- 8b. get_post_comments.
+
+drop function if exists public.get_post_comments(uuid, jsonb, integer);
+
+create or replace function public.get_post_comments(p_post_id uuid, p_cursor jsonb default null::jsonb, p_limit integer default 20)
+returns table(id uuid, post_id uuid, parent_id uuid, user_id uuid, text text, created_at timestamp with time zone, like_count integer, reply_count integer, is_liked boolean, is_author_liked boolean, is_post_author boolean, profile_name text, profile_image text, profile_handle text)
+language sql
+stable security definer
+set search_path = public, pg_temp
+as $$
+    select c.id, c.post_id, c.parent_id, c.user_id, c.text, c.created_at,
+           c.like_count, c.reply_count,
+           exists (select 1 from public.comment_likes cl
+                    where cl.comment_id = c.id and cl.user_id = (select auth.uid())),
+           -- The creator's heart. A primary-key probe, same as is_liked.
+           exists (select 1 from public.comment_likes cl
+                    where cl.comment_id = c.id and cl.user_id = a.author),
+           c.user_id = a.author,
+           pr.name, pr.image,
+           pr.handle
+    from public.comments c
+    join public.profiles pr on pr.user_id = c.user_id
+    cross join lateral (
+        select p.user_id as author
+          from public.posts p
+         where p.id = p_post_id
+           and (p.deleted_at is null or p.user_id = (select auth.uid()))
+    ) a
+    where c.post_id = p_post_id
+      and c.parent_id is null
+      and c.deleted_at is null
+      and not exists (select 1 from public.blocks b
+                       where (b.blocker_id = (select auth.uid()) and b.blocked_id = c.user_id)
+                          or (b.blocked_id = (select auth.uid()) and b.blocker_id = c.user_id))
+      and not exists (select 1 from public.mutes m
+                       where m.muter_id = (select auth.uid()) and m.muted_id = c.user_id)
+      -- Newest first, matching what the comment list has always shown.
+      and (nullif(p_cursor->>'ts', '')::timestamptz is null
+           or (c.created_at, c.id)
+              < (nullif(p_cursor->>'ts', '')::timestamptz, nullif(p_cursor->>'id', '')::uuid))
+    order by c.created_at desc, c.id desc
+    limit least(greatest(coalesce(p_limit, 20), 1), 50);
+$$;
+
+revoke execute on function public.get_post_comments(uuid, jsonb, integer) from public;
+grant  execute on function public.get_post_comments(uuid, jsonb, integer) to anon, authenticated;
+
+-- 8c. get_comment_replies.
+
+drop function if exists public.get_comment_replies(uuid, jsonb, integer);
+
+create or replace function public.get_comment_replies(p_parent_id uuid, p_cursor jsonb default null::jsonb, p_limit integer default 10)
+returns table(id uuid, post_id uuid, parent_id uuid, user_id uuid, text text, created_at timestamp with time zone, like_count integer, reply_count integer, is_liked boolean, is_author_liked boolean, is_post_author boolean, profile_name text, profile_image text, profile_handle text)
+language sql
+stable security definer
+set search_path = public, pg_temp
+as $$
+    select c.id, c.post_id, c.parent_id, c.user_id, c.text, c.created_at,
+           c.like_count, c.reply_count,
+           exists (select 1 from public.comment_likes cl
+                    where cl.comment_id = c.id and cl.user_id = (select auth.uid())),
+           exists (select 1 from public.comment_likes cl
+                    where cl.comment_id = c.id and cl.user_id = p.user_id),
+           c.user_id = p.user_id,
+           pr.name, pr.image,
+           pr.handle
+    from public.comments c
+    -- `parent.parent_id is null` here is not redundant with section 4: it is
+    -- what makes an id that is ITSELF a reply return empty, rather than
+    -- quietly behaving like a third level.
+    join public.comments parent
+      on parent.id = p_parent_id and parent.parent_id is null and parent.deleted_at is null
+    join public.posts p
+      on p.id = parent.post_id
+     and (p.deleted_at is null or p.user_id = (select auth.uid()))
+    join public.profiles pr on pr.user_id = c.user_id
+    where c.parent_id = p_parent_id
+      and c.deleted_at is null
+      and not exists (select 1 from public.blocks b
+                       where (b.blocker_id = (select auth.uid()) and b.blocked_id = c.user_id)
+                          or (b.blocked_id = (select auth.uid()) and b.blocker_id = c.user_id))
+      and not exists (select 1 from public.mutes m
+                       where m.muter_id = (select auth.uid()) and m.muted_id = c.user_id)
+      -- ASC, and the comparison flips with it: a thread is a conversation and
+      -- reads oldest-first, unlike the list of comments above it.
+      and (nullif(p_cursor->>'ts', '')::timestamptz is null
+           or (c.created_at, c.id)
+              > (nullif(p_cursor->>'ts', '')::timestamptz, nullif(p_cursor->>'id', '')::uuid))
+    order by c.created_at asc, c.id asc
+    limit least(greatest(coalesce(p_limit, 10), 1), 30);
+$$;
+
+revoke execute on function public.get_comment_replies(uuid, jsonb, integer) from public;
+grant  execute on function public.get_comment_replies(uuid, jsonb, integer) to anon, authenticated;
+
+-- 8d. get_blocked_accounts and get_muted_accounts. Both LEFT JOIN profiles
+-- because the joined-to account can have been deleted while the block/mute
+-- record itself is kept, and both already coalesce name/image/bio for that
+-- row-may-not-exist case -- handle gets the same treatment for the same
+-- reason.
+
+drop function if exists public.get_blocked_accounts(integer);
+
+create or replace function public.get_blocked_accounts(p_limit integer default 100)
+returns table(user_id uuid, name text, image text, bio text, created_at timestamp with time zone, handle text)
+language sql
+stable security definer
+set search_path = public, pg_temp
+as $$
+    select b.blocked_id,
+           coalesce(pr.name, 'Unknown account'),
+           coalesce(pr.image, ''),
+           coalesce(pr.bio, ''),
+           b.created_at,
+           coalesce(pr.handle, '')
+    from public.blocks b
+    left join public.profiles pr on pr.user_id = b.blocked_id
+    where b.blocker_id = (select auth.uid())
+    order by b.created_at desc
+    limit least(greatest(coalesce(p_limit, 100), 1), 200);
+$$;
+
+revoke execute on function public.get_blocked_accounts(integer) from public, anon;
+grant  execute on function public.get_blocked_accounts(integer) to authenticated;
+
+drop function if exists public.get_muted_accounts(integer);
+
+create or replace function public.get_muted_accounts(p_limit integer default 100)
+returns table(user_id uuid, name text, image text, bio text, created_at timestamp with time zone, handle text)
+language sql
+stable security definer
+set search_path = public, pg_temp
+as $$
+    select m.muted_id,
+           coalesce(pr.name, 'Unknown account'),
+           coalesce(pr.image, ''),
+           coalesce(pr.bio, ''),
+           m.created_at,
+           coalesce(pr.handle, '')
+    from public.mutes m
+    left join public.profiles pr on pr.user_id = m.muted_id
+    where m.muter_id = (select auth.uid())
+    order by m.created_at desc
+    limit least(greatest(coalesce(p_limit, 100), 1), 200);
+$$;
+
+revoke execute on function public.get_muted_accounts(integer) from public, anon;
+grant  execute on function public.get_muted_accounts(integer) to authenticated;
+
+-- 8e. get_followers and get_following_accounts.
+
+drop function if exists public.get_followers(uuid, jsonb, integer);
+
+create or replace function public.get_followers(p_user_id uuid, p_cursor jsonb default null::jsonb, p_limit integer default 24)
+returns table(user_id uuid, name text, image text, bio text, follower_count integer, is_following boolean, is_self boolean, followed_at timestamp with time zone, handle text)
+language sql
+stable security definer
+set search_path = public, pg_temp
+as $$
+    select pr.user_id, pr.name, pr.image, pr.bio, pr.follower_count,
+           exists (select 1 from public.follows mf
+                    where mf.user_id = (select auth.uid()) and mf.to_user_id = pr.user_id),
+           pr.user_id is not distinct from (select auth.uid()),
+           f.created_at,
+           pr.handle
+    from public.follows  f
+    join public.profiles pr on pr.user_id = f.user_id
+    where f.to_user_id = p_user_id
+      and not exists (select 1 from public.blocks b
+                       where (b.blocker_id = (select auth.uid()) and b.blocked_id = pr.user_id)
+                          or (b.blocked_id = (select auth.uid()) and b.blocker_id = pr.user_id))
+      and (nullif(p_cursor->>'ts', '')::timestamptz is null
+           or (f.created_at, f.user_id)
+              < (nullif(p_cursor->>'ts', '')::timestamptz, nullif(p_cursor->>'id', '')::uuid))
+    order by f.created_at desc, f.user_id desc
+    limit least(greatest(coalesce(p_limit, 24), 1), 48);
+$$;
+
+revoke execute on function public.get_followers(uuid, jsonb, integer) from public;
+grant  execute on function public.get_followers(uuid, jsonb, integer) to anon, authenticated;
+
+drop function if exists public.get_following_accounts(uuid, jsonb, integer);
+
+create or replace function public.get_following_accounts(p_user_id uuid, p_cursor jsonb default null::jsonb, p_limit integer default 24)
+returns table(user_id uuid, name text, image text, bio text, follower_count integer, is_following boolean, is_self boolean, followed_at timestamp with time zone, handle text)
+language sql
+stable security definer
+set search_path = public, pg_temp
+as $$
+    select pr.user_id, pr.name, pr.image, pr.bio, pr.follower_count,
+           exists (select 1 from public.follows mf
+                    where mf.user_id = (select auth.uid()) and mf.to_user_id = pr.user_id),
+           pr.user_id is not distinct from (select auth.uid()),
+           f.created_at,
+           pr.handle
+    from public.follows  f
+    join public.profiles pr on pr.user_id = f.to_user_id
+    where f.user_id = p_user_id
+      and not exists (select 1 from public.blocks b
+                       where (b.blocker_id = (select auth.uid()) and b.blocked_id = pr.user_id)
+                          or (b.blocked_id = (select auth.uid()) and b.blocker_id = pr.user_id))
+      and (nullif(p_cursor->>'ts', '')::timestamptz is null
+           or (f.created_at, f.to_user_id)
+              < (nullif(p_cursor->>'ts', '')::timestamptz, nullif(p_cursor->>'id', '')::uuid))
+    order by f.created_at desc, f.to_user_id desc
+    limit least(greatest(coalesce(p_limit, 24), 1), 48);
+$$;
+
+revoke execute on function public.get_following_accounts(uuid, jsonb, integer) from public;
+grant  execute on function public.get_following_accounts(uuid, jsonb, integer) to anon, authenticated;
+
+-- 8f. get_profile.
+
+drop function if exists public.get_profile(uuid);
+
+create or replace function public.get_profile(p_user_id uuid)
+returns table(user_id uuid, name text, image text, bio text, follower_count integer, following_count integer, post_count integer, total_likes bigint, is_following boolean, is_blocked boolean, is_self boolean, handle text)
+language sql
+stable security definer
+set search_path = public, pg_temp
+as $$
+    select pr.user_id, pr.name, pr.image, pr.bio,
+           pr.follower_count, pr.following_count, pr.post_count,
+           coalesce((select sum(p.like_count) from public.posts p
+                      where p.user_id = pr.user_id and p.deleted_at is null), 0)::bigint,
+           exists (select 1 from public.follows f
+                    where f.user_id = (select auth.uid()) and f.to_user_id = pr.user_id),
+           exists (select 1 from public.blocks b
+                    where b.blocker_id = (select auth.uid()) and b.blocked_id = pr.user_id),
+           pr.user_id = (select auth.uid()),
+           pr.handle
+    from public.profiles pr
+    where pr.user_id = p_user_id;
+$$;
+
+revoke execute on function public.get_profile(uuid) from public;
+grant  execute on function public.get_profile(uuid) to anon, authenticated;
+
+-- 8g. get_trending_creators. The one function in this section that
+-- aggregates, so pr.handle -- unlike every other added expression here --
+-- must also be added to the GROUP BY, or Postgres rejects the query with
+-- "column pr.handle must appear in the GROUP BY clause". order by 7 still
+-- means recent_engagement: appending handle at the end of the select list
+-- keeps it out of the way of that ordinal.
+
+drop function if exists public.get_trending_creators(integer);
+
+create or replace function public.get_trending_creators(p_limit integer default 10)
+returns table(user_id uuid, name text, image text, bio text, follower_count integer, post_count integer, recent_engagement bigint, is_following boolean, handle text)
+language sql
+stable security definer
+set search_path = public, pg_temp
+as $$
+    select pr.user_id, pr.name, pr.image, pr.bio, pr.follower_count, pr.post_count,
+           coalesce(sum(p.like_count + p.comment_count * 2 + p.repost_count * 3)
+                    filter (where p.created_at > now() - interval '14 days'), 0)::bigint,
+           exists (select 1 from public.follows f
+                    where f.user_id = (select auth.uid()) and f.to_user_id = pr.user_id),
+           pr.handle
+    from public.profiles pr
+    left join public.posts p on p.user_id = pr.user_id and p.deleted_at is null
+    where pr.user_id is distinct from (select auth.uid())
+      and not exists (select 1 from public.blocks b
+                       where (b.blocker_id = (select auth.uid()) and b.blocked_id = pr.user_id)
+                          or (b.blocked_id = (select auth.uid()) and b.blocker_id = pr.user_id))
+    group by pr.user_id, pr.name, pr.image, pr.bio, pr.follower_count, pr.post_count, pr.handle
+    order by 7 desc, pr.follower_count desc
+    limit least(greatest(coalesce(p_limit, 10), 1), 30);
+$$;
+
+revoke execute on function public.get_trending_creators(integer) from public;
+grant  execute on function public.get_trending_creators(integer) to anon, authenticated;
+
+-- 8h. search_users. Unlike the other nine, this one also gains a second
+-- match path: today a search only tests p_query against the display name,
+-- which is exactly the field 0011 stops treating as an identity. Without this
+-- change, searching for the handle you know an account by -- as opposed to
+-- the display name you might not -- would silently return nothing. name
+-- keeps ILIKE (fuzzy, case-insensitive, matches the trigram index this
+-- function already relies on for ranking); handle uses plain LIKE against a
+-- lower()ed query because the column is already lowercase-only by the CHECK
+-- in section 1, so no case folding is needed on that side.
+
+drop function if exists public.search_users(text, integer);
+
+create or replace function public.search_users(p_query text, p_limit integer default 12)
+returns table(user_id uuid, name text, image text, bio text, follower_count integer, is_following boolean, rank real, handle text)
+language sql
+stable security definer
+set search_path = public, pg_temp
+as $$
+    select pr.user_id, pr.name, pr.image, pr.bio, pr.follower_count,
+           exists (select 1 from public.follows f
+                    where f.user_id = (select auth.uid()) and f.to_user_id = pr.user_id),
+           extensions.similarity(pr.name, p_query),
+           pr.handle
+    from public.profiles pr
+    where (pr.name ilike '%' || p_query || '%' or pr.handle like '%' || lower(p_query) || '%')
+      and not exists (select 1 from public.blocks b
+                       where (b.blocker_id = (select auth.uid()) and b.blocked_id = pr.user_id)
+                          or (b.blocked_id = (select auth.uid()) and b.blocker_id = pr.user_id))
+    order by extensions.similarity(pr.name, p_query) desc, pr.follower_count desc
+    limit least(greatest(coalesce(p_limit, 12), 1), 30);
+$$;
+
+revoke execute on function public.search_users(text, integer) from public;
+grant  execute on function public.search_users(text, integer) to anon, authenticated;
