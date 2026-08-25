@@ -15,7 +15,6 @@ import {
   setVideoCaptionsEnabled,
   subscribeToVideoCaptionsPreference,
 } from '@/app/utils/videoCaptionsPreference'
-import { useCommentStore } from '@/app/stores/comment'
 import { usePostStore } from '@/app/stores/post'
 import { PostPageTypes } from '@/app/types'
 import {
@@ -32,6 +31,7 @@ import {
   type VideoPlaybackSnapshot,
 } from '@/app/utils/videoPlayback'
 import { setVideoSoundEnabled } from '@/app/utils/videoSoundPreference'
+import { formatCount } from '@/app/utils/formatNumber'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import SearchParamReader from '@/app/components/SearchParamReader'
@@ -41,7 +41,6 @@ import { BiChevronDown, BiChevronUp } from 'react-icons/bi'
 
 const Post = ({ params }: PostPageTypes) => {
   const { postById, postByIdStatus, postsByUser, setPostById, setPostsByUser } = usePostStore()
-  const { commentsByPost, setCommentsByPost, clearComments } = useCommentStore()
 
   const [isMobileSheetExpanded, setIsMobileSheetExpanded] = useState<boolean>(false)
   const [isSheetDragging, setIsSheetDragging] = useState<boolean>(false)
@@ -71,14 +70,14 @@ const Post = ({ params }: PostPageTypes) => {
   const [shouldOpenCommentsMode, setShouldOpenCommentsMode] = useState<boolean>(false)
 
   useEffect(() => {
-    // Cleared first: navigating between posts otherwise left the previous
-    // post's comment thread on screen under the new video until the fetch
-    // resolved.
-    clearComments()
+    // Comments are no longer fetched here. CommentThread loads and resets its
+    // own thread from params.postId, which is what the clearComments() call
+    // that used to lead this effect existed to do -- a shared store meant the
+    // previous post's thread stayed on screen under the new video until the
+    // next fetch resolved.
     setPostById(params.postId)
-    setCommentsByPost(params.postId)
     setPostsByUser(params.userId)
-  }, [params.postId, params.userId, clearComments, setCommentsByPost, setPostById, setPostsByUser])
+  }, [params.postId, params.userId, setPostById, setPostsByUser])
 
   useEffect(() => {
     if (shouldOpenCommentsMode) {
@@ -610,7 +609,7 @@ const Post = ({ params }: PostPageTypes) => {
                       onClick={() => setIsMobileSheetExpanded(true)}
                       className="mx-4 mt-2 rounded-xl border border-line bg-surface-subtle py-3 text-sm font-semibold text-ink-soft"
                     >
-                      View comments ({commentsByPost.length})
+                      View comments ({formatCount(postById?.comment_count ?? 0)})
                     </button>
                   )}
                 </div>

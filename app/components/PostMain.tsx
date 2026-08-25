@@ -3,8 +3,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AiFillHeart, AiOutlineRetweet } from 'react-icons/ai'
-import { BiLoaderCircle } from 'react-icons/bi'
-import { BsFillPlayFill, BsBookmark, BsBookmarkFill, BsTrash3 } from 'react-icons/bs'
+import { BsFillPlayFill, BsBookmark, BsBookmarkFill } from 'react-icons/bs'
 import { FaCommentDots, FaRegCopy, FaShare } from 'react-icons/fa'
 import { FiShare } from 'react-icons/fi'
 import { ImMusic } from 'react-icons/im'
@@ -16,16 +15,14 @@ import { recordShare } from '../utils/feed'
 import { feedWatchSession } from '../utils/feedWatch'
 import { useUser } from '../context/user'
 import { createBucketUrl } from '../hooks/useCreateBucketUrl'
-import useCreateComment from '../hooks/useCreateComment'
 import useCreateFollow from '../hooks/useCreateFollow'
 import useCreateLike from '../hooks/useCreateLike'
-import useDeleteComment from '../hooks/useDeleteComment'
 import useDeleteFollow from '../hooks/useDeleteFollow'
 import useDeleteLike from '../hooks/useDeleteLike'
-import useGetCommentsByPostId from '../hooks/useGetCommentsByPostId'
 import useIsFollowing from '../hooks/useIsFollowing'
+import CommentThread from './post/CommentThread'
 import { useGeneralStore } from '../stores/general'
-import { CommentWithProfile, PostMainCompTypes } from '../types'
+import { PostMainCompTypes } from '../types'
 import { isFloatingVideo, pauseOtherVideos, pauseVideosDuringNavigation, rememberVideoPlayback } from '../utils/videoPlayback'
 import { getImagePostAudioId, getImagePostIds, isImagePost } from '../utils/postMedia'
 import { resolutionLabel } from '../utils/videoQuality'
@@ -87,7 +84,6 @@ const PostMain = ({
   const postMainRef = useRef<HTMLDivElement>(null)
   const tapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastTapRef = useRef<number>(0)
-  const commentInputRef = useRef<HTMLInputElement | null>(null)
   // Only the card the viewer actually clicked should pull focus into the input.
   // Without this, every swipe with the panel open would refocus (and on mobile
   // reopen the keyboard) on whichever card scrolled into place. A ref, not
@@ -114,13 +110,6 @@ const PostMain = ({
   const [isLikeLoading, setIsLikeLoading] = useState<boolean>(false)
   const [isSaveLoading, setIsSaveLoading] = useState<boolean>(false)
   const [isRepostLoading, setIsRepostLoading] = useState<boolean>(false)
-
-  const [comments, setComments] = useState<CommentWithProfile[]>([])
-  const [isCommentsLoading, setIsCommentsLoading] = useState<boolean>(false)
-  const [hasLoadedComments, setHasLoadedComments] = useState<boolean>(false)
-  const [commentInput, setCommentInput] = useState<string>('')
-  const [isSubmittingComment, setIsSubmittingComment] = useState<boolean>(false)
-  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null)
 
   const [isShareSheetOpen, setIsShareSheetOpen] = useState<boolean>(false)
   const [canNativeShare, setCanNativeShare] = useState<boolean>(false)
@@ -721,21 +710,6 @@ const PostMain = ({
    */
   const isCommentsSheetOpen = isFeedCommentsOpen && activeFeedPostId === post.id
 
-  const loadComments = useCallback(async () => {
-    setIsCommentsLoading(true)
-    try {
-      const result = await useGetCommentsByPostId(post.id)
-      setComments(result || [])
-      setCommentsCount(result?.length ?? 0)
-      setHasLoadedComments(true)
-    } catch (error) {
-      console.error(error)
-      showToast('Could not load comments', 'error')
-    } finally {
-      setIsCommentsLoading(false)
-    }
-  }, [post.id])
-
   const openCommentsSheet = useCallback(() => {
     if (isCommentsSheetOpen) {
       setIsFeedCommentsOpen(false)
@@ -745,18 +719,6 @@ const PostMain = ({
     pendingCommentFocusRef.current = true
     setIsFeedCommentsOpen(true)
   }, [isCommentsSheetOpen, setIsFeedCommentsOpen])
-
-  /**
-   * Comments are the one thing not carried on the post row, so they are fetched
-   * on demand rather than for all 8 posts of every page. Keying this off the
-   * panel being visible -- rather than off the click that opened it -- is what
-   * loads the next video's thread when the viewer scrolls with the panel open.
-   */
-  useEffect(() => {
-    if (!isCommentsSheetOpen || hasLoadedComments || isCommentsLoading) return
-
-    void loadComments()
-  }, [hasLoadedComments, isCommentsLoading, isCommentsSheetOpen, loadComments])
 
   useEffect(() => {
     if (!isCommentsSheetOpen) return
@@ -769,55 +731,32 @@ const PostMain = ({
     return () => document.removeEventListener('keydown', onKey)
   }, [isCommentsSheetOpen, setIsFeedCommentsOpen])
 
+  /**
+   * Consumed once, on the render that opens the panel, and handed to
+   * CommentThread as autoFocus. It stays a ref rather than state so that
+   * scrolling to the next card with the panel already open does NOT steal
+   * focus into the composer -- only the click that opened it should.
+   */
+  const shouldFocusComposer = isCommentsSheetOpen && pendingCommentFocusRef.current
   useEffect(() => {
-    if (!isCommentsSheetOpen || !pendingCommentFocusRef.current) return
+    if (shouldFocusComposer) pendingCommentFocusRef.current = false
+  }, [shouldFocusComposer])
 
-    pendingCommentFocusRef.current = false
-    const timer = setTimeout(() => commentInputRef.current?.focus(), 80)
-
-    return () => clearTimeout(timer)
-  }, [isCommentsSheetOpen])
-
-  const submitInlineComment = useCallback(async () => {
-    if (!user?.id) {
-      setIsLoginOpen(true)
-      return
-    }
-
-    const cleanComment = commentInput.trim()
-    if (!cleanComment || isSubmittingComment) return
-
-    setIsSubmittingComment(true)
-    try {
-      await useCreateComment(user.id, post.id, cleanComment)
-      setCommentInput('')
-      setCommentsCount((count) => count + 1)
-      patchUp({ comment_count: commentsCount + 1 })
-      await loadComments()
-    } catch (error) {
-      console.error(error)
-      showToast('Could not post your comment', 'error')
-    } finally {
-      setIsSubmittingComment(false)
-    }
-  }, [commentInput, commentsCount, isSubmittingComment, loadComments, patchUp, post.id, setIsLoginOpen, user?.id])
-
-  const deleteFeedComment = useCallback(async (commentId: string) => {
-    if (deletingCommentId) return
-
-    setDeletingCommentId(commentId)
-    try {
-      await useDeleteComment(commentId)
-      setCommentsCount((count) => Math.max(0, count - 1))
-      patchUp({ comment_count: Math.max(0, commentsCount - 1) })
-      await loadComments()
-    } catch (error) {
-      console.error(error)
-      showToast('Could not delete comment', 'error')
-    } finally {
-      setDeletingCommentId(null)
-    }
-  }, [commentsCount, deletingCommentId, loadComments, patchUp])
+  /**
+   * CommentThread owns the thread and reports what it did; the card owns the
+   * counter under the speech bubble and the write-back into the feed store, so
+   * the number stays correct when the viewer scrolls away and back.
+   *
+   * The delta is not always 1: deleting a top-level comment takes its replies
+   * with it via the cascade added in 0007.
+   */
+  const applyCommentDelta = useCallback((delta: number) => {
+    setCommentsCount((count) => {
+      const next = Math.max(0, count + delta)
+      patchUp({ comment_count: next })
+      return next
+    })
+  }, [patchUp])
 
   // ----------------------------------------------------------------- detail
 
@@ -1179,85 +1118,19 @@ const PostMain = ({
               </button>
             </div>
 
-            <div className="max-h-[48dvh] overflow-y-auto pb-3 md:max-h-none md:min-h-0 md:flex-1 md:pb-0">
-              {isCommentsLoading ? (
-                <p className="py-8 text-center text-sm text-ink-soft">Loading comments...</p>
-              ) : comments.length < 1 ? (
-                <p className="py-8 text-center text-sm text-ink-soft">No comments yet</p>
-              ) : (
-                comments.map((comment) => (
-                  <div key={comment.id} className="mb-3 flex items-start gap-3 md:mb-0 md:px-4 md:py-3">
-                    <img
-                      className="h-9 w-9 rounded-full object-cover md:h-10 md:w-10"
-                      src={createBucketUrl(comment.profile.image)}
-                      alt=""
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-semibold md:text-[15px] md:text-ink-soft">
-                        {comment.profile.name}
-                      </p>
-                      <p className="break-words text-[14px] leading-5 md:mt-1 md:text-[16px] md:leading-6">
-                        {comment.text}
-                      </p>
-                      <p className="mt-1 text-[12px] font-medium text-ink-soft md:mt-2 md:text-[14px]">
-                        {moment(comment.created_at).fromNow()}
-                      </p>
-                    </div>
-                    {user?.id === comment.user_id ? (
-                      <button
-                        onClick={() => deleteFeedComment(comment.id)}
-                        disabled={deletingCommentId === comment.id}
-                        aria-label="Delete comment"
-                        className="mt-1 text-ink-soft hover:text-ink disabled:opacity-60"
-                      >
-                        {deletingCommentId === comment.id ? (
-                          <BiLoaderCircle className="animate-spin" size={15} />
-                        ) : (
-                          <BsTrash3 size={14} />
-                        )}
-                      </button>
-                    ) : null}
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div className="border-t border-line py-3 pb-[calc(env(safe-area-inset-bottom)+12px)] md:px-4 md:pb-3">
-              {!user?.id ? (
-                <button
-                  onClick={() => setIsLoginOpen(true)}
-                  className="flex w-full items-center justify-center gap-2 rounded-full bg-tiktok py-3 text-[15px] font-semibold text-white hover:bg-tiktok-hover"
-                >
-                  <FaCommentDots size={18} />
-                  Log in to comment
-                </button>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <label className="sr-only" htmlFor={`comment-${post.id}`}>
-                    Add comment
-                  </label>
-                  <input
-                    id={`comment-${post.id}`}
-                    ref={commentInputRef}
-                    value={commentInput}
-                    onChange={(event) => setCommentInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') submitInlineComment()
-                    }}
-                    className="w-full rounded-full border border-transparent bg-surface-subtle px-4 py-2.5 text-sm text-ink outline-none placeholder:text-ink-soft focus:border-line"
-                    placeholder="Add comment..."
-                  />
-                  <button
-                    onClick={submitInlineComment}
-                    disabled={!commentInput.trim() || isSubmittingComment}
-                    className={`text-sm font-semibold ${
-                      commentInput.trim() && !isSubmittingComment ? 'text-tiktok' : 'text-ink-soft'
-                    }`}
-                  >
-                    {isSubmittingComment ? '...' : 'Post'}
-                  </button>
-                </div>
-              )}
+            {/*
+              The list, the composer, replies and comment likes come from
+              CommentThread, which the post detail page renders too. This card
+              keeps only the sheet/drawer chrome around it -- the two surfaces
+              used to have separate copies of the list and had already drifted.
+            */}
+            <div className="flex max-h-[60dvh] min-h-0 flex-col md:max-h-none md:flex-1">
+              <CommentThread
+                postId={post.id}
+                variant="sheet"
+                autoFocusInput={shouldFocusComposer}
+                onCountChange={applyCommentDelta}
+              />
             </div>
           </div>
         </div>

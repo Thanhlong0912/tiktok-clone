@@ -13,11 +13,12 @@ import {
   MdOutlineSpeed,
   MdPersonOff,
   MdPictureInPictureAlt,
+  MdVolumeOff,
 } from 'react-icons/md'
 import AutoScrollToggle from './AutoScrollToggle'
 import ReasonSheet from './ReasonSheet'
 import { showToast } from '../utils/toast'
-import { blockUser, markNotInterested, reportContent, REPORT_REASONS, type ReportReason } from '../utils/feed'
+import { blockUser, markNotInterested, muteUser, reportContent, REPORT_REASONS, type ReportReason } from '../utils/feed'
 import { useUser } from '../context/user'
 import { useGeneralStore } from '../stores/general'
 import {
@@ -90,6 +91,7 @@ const VideoOptionsMenu = ({
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false)
   const [isReporting, setIsReporting] = useState<boolean>(false)
   const [isBlocking, setIsBlocking] = useState<boolean>(false)
+  const [isMuting, setIsMuting] = useState<boolean>(false)
   const { user } = useUser() || {}
   const { setIsLoginOpen } = useGeneralStore()
 
@@ -207,6 +209,38 @@ const VideoOptionsMenu = ({
       showToast((error as Error)?.message || 'Could not block this account', 'error')
     } finally {
       setIsBlocking(false)
+    }
+  }
+
+  /**
+   * The softer half of the block pair, and it had the same problem: get_feed
+   * has filtered public.mutes since 0002 but nothing ever wrote a row, so the
+   * filter ran against an empty set.
+   *
+   * The copy is deliberately narrower than Block's. A mute is honoured by
+   * get_feed and by the comment reads, and NOT by get_following_feed, search
+   * or the creator's own profile -- so promising "you will not see them again"
+   * would be a promise the schema does not keep.
+   */
+  const handleMute = async () => {
+    changeMenuOpen(false)
+
+    if (!user?.id) {
+      setIsLoginOpen(true)
+      return
+    }
+    if (!postUserId || isMuting) return
+
+    setIsMuting(true)
+    try {
+      await muteUser(postUserId)
+      showToast('Muted. You will not see them in For You.')
+      onNotInterested?.(postId ?? '')
+    } catch (error) {
+      console.error(error)
+      showToast((error as Error)?.message || 'Could not mute this account', 'error')
+    } finally {
+      setIsMuting(false)
     }
   }
 
@@ -449,21 +483,36 @@ const VideoOptionsMenu = ({
                       Not interested
                     </button>
 
-                    {/* Only for someone else's video: blocking yourself is
-                        rejected by a check constraint anyway. */}
+                    {/* Only for someone else's video: blocking or muting
+                        yourself is rejected by a check constraint anyway. */}
                     {postUserId && user?.id !== postUserId ? (
-                      <button
-                        role="menuitem"
-                        disabled={isBlocking}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          handleBlock()
-                        }}
-                        className={`${rowClassName} disabled:opacity-60`}
-                      >
-                        <MdPersonOff size={17} />
-                        Block this account
-                      </button>
+                      <>
+                        <button
+                          role="menuitem"
+                          disabled={isMuting}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            handleMute()
+                          }}
+                          className={`${rowClassName} disabled:opacity-60`}
+                        >
+                          <MdVolumeOff size={17} />
+                          Mute this account
+                        </button>
+
+                        <button
+                          role="menuitem"
+                          disabled={isBlocking}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            handleBlock()
+                          }}
+                          className={`${rowClassName} disabled:opacity-60`}
+                        >
+                          <MdPersonOff size={17} />
+                          Block this account
+                        </button>
+                      </>
                     ) : null}
 
                     <button

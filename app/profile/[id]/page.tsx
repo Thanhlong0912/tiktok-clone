@@ -19,6 +19,7 @@ import Link from "next/link"
 import { useCallback, useEffect, useState } from "react"
 import { BsPencil, BsPerson } from "react-icons/bs"
 import { FiShare } from "react-icons/fi"
+import { IoSettingsOutline } from "react-icons/io5"
 
 
 const Profile = ({ params }: ProfilePageTypes) => {
@@ -241,13 +242,25 @@ const Profile = ({ params }: ProfilePageTypes) => {
 
                     <div className="flex items-center gap-2">
                         {isOwnProfile ? (
-                            <button
-                                onClick={() => setIsEditProfileOpen(!isEditProfileOpen)}
-                                className="flex item-center rounded-md py-1.5 px-3.5 mt-3 text-[15px] font-semibold border border-line hover:bg-surface-subtle text-ink"
-                            >
-                                <BsPencil className="mt-0.5 mr-1" size="18"/>
-                                <span>Edit profile</span>
-                            </button>
+                            <>
+                                <button
+                                    onClick={() => setIsEditProfileOpen(!isEditProfileOpen)}
+                                    className="flex item-center rounded-md py-1.5 px-3.5 mt-3 text-[15px] font-semibold border border-line hover:bg-surface-subtle text-ink"
+                                >
+                                    <BsPencil className="mt-0.5 mr-1" size="18"/>
+                                    <span>Edit profile</span>
+                                </button>
+                                {/* Where a block or a mute gets undone. Owner
+                                    only -- the lists are scoped to auth.uid()
+                                    server-side regardless. */}
+                                <Link
+                                    href="/settings/privacy"
+                                    aria-label="Privacy settings"
+                                    className="mt-3 rounded-md border border-line p-2 text-ink hover:bg-surface-subtle"
+                                >
+                                    <IoSettingsOutline size={18} />
+                                </Link>
+                            </>
                         ) : (
                             <button
                                 onClick={toggleFollow}
@@ -270,15 +283,19 @@ const Profile = ({ params }: ProfilePageTypes) => {
 
             </div>
 
+            {/* The first two counts are links now. They rendered as plain text
+                before, which made the social graph a dead end -- there was no
+                way to get from a profile to the accounts around it. Likes stays
+                text: there is no "who liked this creator" list to open. */}
             <div className="flex items-center pt-4">
-                <div className="mr-4">
+                <Link href={`/profile/${params.id}/followers?tab=following`} className="mr-4 hover:underline">
                     <span className="font-bold text-ink">{formatCount(followingCount)}</span>
                     <span className="text-ink-soft font-light text-[15px] pl-1.5">Following</span>
-                </div>
-                <div className="mr-4">
+                </Link>
+                <Link href={`/profile/${params.id}/followers?tab=followers`} className="mr-4 hover:underline">
                     <span className="font-bold text-ink">{formatCount(followersCount)}</span>
                     <span className="text-ink-soft font-light text-[15px] pl-1.5">Followers</span>
-                </div>
+                </Link>
                 <div className="mr-4">
                     <span className="font-bold text-ink">{formatCount(likesCount)}</span>
                     <span className="text-ink-soft font-light text-[15px] pl-1.5">Likes</span>
