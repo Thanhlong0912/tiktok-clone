@@ -256,7 +256,17 @@ export async function blockUser(userId: string): Promise<void> {
 
   const { error } = await supabase
     .from('blocks')
-    .upsert({ blocker_id: blockerId, blocked_id: userId }, { onConflict: 'blocker_id,blocked_id' })
+    // ignoreDuplicates for the reason likeComment spells out: without it
+    // PostgREST emits ON CONFLICT DO UPDATE, which requires UPDATE on the
+    // table. blocks still grants it, so this works either way today -- but the
+    // payload is the key and nothing else, so the merge can only ever rewrite a
+    // row with itself, leaving created_at untouched. DO NOTHING says that
+    // outright, and keeps working if the column-grant hardening 0006 and 0007
+    // applied to posts, profiles and comment_likes ever reaches this table.
+    .upsert(
+      { blocker_id: blockerId, blocked_id: userId },
+      { onConflict: 'blocker_id,blocked_id', ignoreDuplicates: true }
+    )
 
   if (error) throw error
 }
@@ -295,7 +305,11 @@ export async function muteUser(userId: string): Promise<void> {
 
   const { error } = await supabase
     .from('mutes')
-    .upsert({ muter_id: muterId, muted_id: userId }, { onConflict: 'muter_id,muted_id' })
+    // ignoreDuplicates, for the reason given above blockUser's upsert.
+    .upsert(
+      { muter_id: muterId, muted_id: userId },
+      { onConflict: 'muter_id,muted_id', ignoreDuplicates: true }
+    )
 
   if (error) throw error
 }
