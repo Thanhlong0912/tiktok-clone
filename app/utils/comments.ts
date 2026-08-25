@@ -133,7 +133,16 @@ export async function likeComment(userId: string, commentId: string): Promise<vo
     .from('comment_likes')
     // Upsert, not insert: double-tapping must not surface a primary key
     // violation to somebody who simply wanted the comment liked.
-    .upsert({ user_id: userId, comment_id: commentId }, { onConflict: 'user_id,comment_id' })
+    //
+    // ignoreDuplicates is what makes that legal here. Without it PostgREST
+    // emits ON CONFLICT DO UPDATE, which requires UPDATE on comment_likes --
+    // and 0007 grants none, deliberately, because a like is inserted or
+    // deleted and never edited. DO NOTHING needs only INSERT, and the
+    // conflicting row is already exactly what the update would have written.
+    .upsert(
+      { user_id: userId, comment_id: commentId },
+      { onConflict: 'user_id,comment_id', ignoreDuplicates: true }
+    )
   if (error) throw error
 }
 
