@@ -25,6 +25,9 @@ const TABS = [
   { id: 'all', label: 'All activity', icon: BiBell },
   { id: 'likes', label: 'Likes', icon: AiFillHeart },
   { id: 'comments', label: 'Comments', icon: FaCommentDots },
+  // Next to Comments rather than after Followers: a mention arrives from a
+  // caption or a comment body, so it belongs with the conversational half.
+  { id: 'mentions', label: 'Mentions', icon: FaAt },
   { id: 'followers', label: 'Followers', icon: FaUserPlus },
 ] as const
 
@@ -32,6 +35,7 @@ const TAB_TYPE: Record<string, NotificationType | null> = {
   all: null,
   likes: 'like',
   comments: 'comment',
+  mentions: 'mention',
   followers: 'follow',
 }
 
