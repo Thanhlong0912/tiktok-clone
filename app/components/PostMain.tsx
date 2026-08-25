@@ -12,6 +12,7 @@ import { formatCount } from '../utils/formatNumber'
 import { showToast } from '../utils/toast'
 import { createInteraction, deleteInteraction } from '../utils/socialInteractions'
 import { recordShare } from '../utils/feed'
+import { getHandles } from '../utils/handleLookup'
 import { feedWatchSession } from '../utils/feedWatch'
 import { useUser } from '../context/user'
 import { createBucketUrl } from '../hooks/useCreateBucketUrl'
@@ -95,6 +96,12 @@ const PostMain = ({
   const [isVideoPaused, setIsVideoPaused] = useState<boolean>(false)
   const [showHeartBurst, setShowHeartBurst] = useState<boolean>(false)
 
+  // post.profile carries no handle -- get_feed returns SETOF feed_post, which
+  // does not thread one through (see app/utils/handleLookup.ts). Empty until
+  // the lookup resolves, same as every other post-derived value that starts
+  // blank on first paint.
+  const [authorHandle, setAuthorHandle] = useState<string>('')
+
   // Seeded from the post row -- no fetch.
   const [likesCount, setLikesCount] = useState<number>(post.like_count)
   const [commentsCount, setCommentsCount] = useState<number>(post.comment_count)
@@ -155,6 +162,18 @@ const PostMain = ({
     post.is_saved,
     post.is_reposted,
   ])
+
+  useEffect(() => {
+    let active = true
+
+    getHandles([post.profile.user_id]).then((handles) => {
+      if (active) setAuthorHandle(handles[post.profile.user_id] ?? '')
+    })
+
+    return () => {
+      active = false
+    }
+  }, [post.profile.user_id])
 
   useEffect(() => {
     const checkFollow = async () => {
@@ -927,7 +946,7 @@ const PostMain = ({
                   href={`/profile/${post.profile.user_id}`}
                   className="font-semibold md:text-[17px] md:font-bold md:hover:underline"
                 >
-                  @{post.profile.name}
+                  @{authorHandle}
                 </Link>
                 {user?.id !== post.profile.user_id ? (
                   <button

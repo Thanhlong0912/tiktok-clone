@@ -223,7 +223,7 @@ export default function ActivityPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-[15px] text-ink">
-                        <span className="font-semibold">@{item.actor_name}</span>{' '}
+                        <span className="font-semibold">@{item.actor_handle}</span>{' '}
                         <span className="text-ink-soft">{meta.label}</span>
                       </p>
                       {item.preview ? (

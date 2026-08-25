@@ -313,7 +313,7 @@ export default function ExplorePage() {
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-surface-subtle"
                     >
                       <img src={createBucketUrl(p.image)} className="h-9 w-9 rounded-full object-cover" alt="" />
-                      <span className="flex-1 text-[15px] font-semibold text-ink">@{p.name}</span>
+                      <span className="flex-1 text-[15px] font-semibold text-ink">@{p.handle}</span>
                       <span className="text-[13px] text-ink-soft">{formatCount(p.follower_count)}</span>
                     </button>
                   ))}
@@ -508,8 +508,8 @@ const SuggestedCreators = ({
   onOpen: (userId: string) => void
 }) => {
   const rows = users.length > 0
-    ? users.map((u) => ({ id: u.user_id, name: u.name, image: u.image, followers: u.follower_count }))
-    : creators.map((c) => ({ id: c.user_id, name: c.name, image: c.image, followers: c.follower_count }))
+    ? users.map((u) => ({ id: u.user_id, handle: u.handle, image: u.image, followers: u.follower_count }))
+    : creators.map((c) => ({ id: c.user_id, handle: c.handle, image: c.image, followers: c.follower_count }))
 
   if (rows.length < 1) return null
 
@@ -527,7 +527,7 @@ const SuggestedCreators = ({
           >
             <img src={createBucketUrl(row.image)} className="h-14 w-14 rounded-full object-cover" alt="" />
             <span className="mt-2 w-full truncate text-center text-[14px] font-semibold text-ink">
-              @{row.name}
+              @{row.handle}
             </span>
             <span className="text-[12px] text-ink-soft">{formatCount(row.followers)} followers</span>
           </button>

@@ -19,7 +19,7 @@ const node = (over: Partial<CommentNode> & { id: string }): CommentNode => ({
   is_liked: false,
   is_author_liked: false,
   is_post_author: false,
-  profile: { user_id: 'user-1', name: 'alice', image: 'a.png' },
+  profile: { user_id: 'user-1', name: 'alice', image: 'a.png', handle: 'alice' },
   ...over,
 })
 

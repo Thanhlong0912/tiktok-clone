@@ -15,6 +15,7 @@ export interface AccountSummary {
   is_following: boolean
   is_self: boolean
   followed_at: string
+  handle: string
 }
 
 export interface AccountCursor {

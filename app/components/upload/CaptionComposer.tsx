@@ -11,6 +11,7 @@ import useSearchProfilesByName from '../../hooks/useSearchProfilesByName'
 import { usePostStore } from '../../stores/post'
 import { RandomUsers } from '../../types'
 import { foldName, rememberMention } from '../../utils/mentions'
+import { getHandles } from '../../utils/handleLookup'
 import { supabase } from '@/libs/supabase'
 
 type ActiveToken = {
@@ -70,12 +71,23 @@ const CaptionComposer = ({
       const seen: Record<string, boolean> = {}
       const merged: RandomUsers[] = []
 
-      allPosts.forEach((post) => {
-        const profile = post.profile
-        if (profile?.user_id && !seen[profile.user_id]) {
-          seen[profile.user_id] = true
-          merged.push({ id: profile.user_id, name: profile.name, image: profile.image })
-        }
+      // allPosts is feed-shaped (get_feed and friends), which carries no
+      // handle -- see app/utils/handleLookup.ts. One batched lookup for every
+      // post author here, instead of a per-post fetch.
+      const feedAuthors = allPosts
+        .map((post) => post.profile)
+        .filter((profile) => Boolean(profile?.user_id))
+      const feedHandles = await getHandles(feedAuthors.map((profile) => profile.user_id))
+
+      feedAuthors.forEach((profile) => {
+        if (seen[profile.user_id]) return
+        seen[profile.user_id] = true
+        merged.push({
+          id: profile.user_id,
+          name: profile.name,
+          image: profile.image,
+          handle: feedHandles[profile.user_id] ?? '',
+        })
       })
 
       try {
@@ -331,7 +343,7 @@ const CaptionComposer = ({
                     className="h-8 w-8 rounded-full object-cover"
                     alt={profile.name}
                   />
-                  <span className="text-[14px] font-semibold text-ink">@{profile.name}</span>
+                  <span className="text-[14px] font-semibold text-ink">@{profile.handle}</span>
                 </button>
               ))}
         </div>

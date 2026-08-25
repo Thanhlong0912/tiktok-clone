@@ -21,6 +21,7 @@ export interface NotificationItem {
   actor_id: string
   actor_name: string
   actor_image: string
+  actor_handle: string
   post_id: string | null
   post_poster_key: string
   post_media: string

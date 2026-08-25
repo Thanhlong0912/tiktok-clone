@@ -13,6 +13,7 @@ const useGetRandomUsers = async () => {
             id: creator.user_id,
             name: creator.name,
             image: creator.image,
+            handle: creator.handle,
         }))
     } catch (error) {
         console.error(error)

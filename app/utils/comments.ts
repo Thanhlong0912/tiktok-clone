@@ -34,6 +34,7 @@ interface CommentRow {
   is_post_author: boolean
   profile_name: string | null
   profile_image: string | null
+  profile_handle: string | null
 }
 
 export type { CommentCursor, CommentNode }
@@ -59,6 +60,7 @@ function toCommentNode(row: CommentRow): CommentNode {
       user_id: row.user_id,
       name: row.profile_name ?? '',
       image: row.profile_image ?? '',
+      handle: row.profile_handle ?? '',
     },
   }
 }

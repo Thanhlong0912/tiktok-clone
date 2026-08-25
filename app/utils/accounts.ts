@@ -53,6 +53,7 @@ export async function fetchFollowList(
     follower_count: row.follower_count ?? 0,
     is_following: Boolean(row.is_following),
     is_self: Boolean(row.is_self),
+    handle: row.handle ?? '',
   }))
 }
 

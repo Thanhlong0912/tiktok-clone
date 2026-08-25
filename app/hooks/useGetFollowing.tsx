@@ -30,7 +30,7 @@ const useGetFollowing = async (userId: string, limit = 5): Promise<RandomUsers[]
 
         const { data: profiles, error: profilesError } = await supabase
             .from('profiles')
-            .select('user_id, name, image')
+            .select('user_id, name, image, handle')
             .in('user_id', ids)
 
         if (profilesError) throw profilesError
@@ -45,6 +45,7 @@ const useGetFollowing = async (userId: string, limit = 5): Promise<RandomUsers[]
                 id: profile.user_id,
                 name: profile.name,
                 image: profile.image,
+                handle: profile.handle ?? '',
             }))
     } catch (error) {
         console.error(error)

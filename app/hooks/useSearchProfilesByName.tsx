@@ -24,6 +24,7 @@ const useSearchProfilesByName = async (name: string) => {
             id: profile?.user_id,
             name: profile?.name,
             image: profile?.image,
+            handle: profile?.handle ?? '',
         }))
     } catch (error) {
         console.error(error)
