@@ -32,6 +32,46 @@ This app uses Supabase for Postgres, Auth and Storage. Before running it:
 
 1. **Run the schema.** Paste each file in `supabase/migrations/` into the
    Supabase SQL editor in order and run it. All of them are idempotent.
+
+   Two things about the SQL editor will silently apply a migration to the
+   wrong place, or to nothing at all. Both report success:
+
+   - **Check the branch selector first.** If the project has database
+     branches, the editor writes to the *selected branch*, not to production —
+     and a preview branch is a copy, so it has the same tables and the same
+     row counts. The project ref in the browser URL stays the same either way,
+     so it cannot be used to tell them apart. Confirm the selector reads
+     production before running anything.
+   - **Select all before running.** The editor executes only the highlighted
+     text when a selection exists, so a stray selection left over from pasting
+     runs a fragment and reports success. Click into the editor, press
+     Cmd/Ctrl+A, then Run.
+
+   To verify a migration actually landed where you meant, query the catalog
+   rather than trusting the editor — `information_schema` does not care about
+   PostgREST's cache, which lags behind DDL and will misreport a fresh column
+   as missing:
+
+   ```sql
+   select current_database(),
+          inet_server_addr() as host,
+          (select count(*) from public.comments) as comments,
+          exists (select 1 from information_schema.columns
+                   where table_name = 'comments' and column_name = 'parent_id')
+            as has_0007;
+   ```
+
+   If the API still cannot see new objects a minute later, run
+   `notify pgrst, 'reload schema';` on its own, and failing that restart the
+   project from Settings → General.
+
+   The editor is avoidable entirely. `psql` against the project's own host
+   takes no branch context and fails loudly instead of silently:
+
+   ```bash
+   psql "postgresql://postgres:PASSWORD@db.<project-ref>.supabase.co:5432/postgres" \
+        -v ON_ERROR_STOP=1 -f supabase/migrations/0007_comment_threads_and_social_lists.sql
+   ```
    - `0001_init.sql` — the seven base tables, RLS, the `handle_new_user`
      trigger, and the public `media` storage bucket.
    - `0002_feed_and_signals.sql` — denormalized counters maintained by
