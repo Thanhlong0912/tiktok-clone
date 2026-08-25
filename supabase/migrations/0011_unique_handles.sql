@@ -358,3 +358,134 @@ revoke execute on function public.handle_available(text) from public, anon;
 grant  execute on function public.handle_available(text) to authenticated;
 revoke execute on function public.set_handle(text)       from public, anon;
 grant  execute on function public.set_handle(text)       to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 7. Mentions resolve by handle.
+--
+-- Both functions are 0010's verbatim, with exactly two changes each and no
+-- others:
+--
+--   1. The join becomes `pr.handle = t.key` instead of
+--      `public.mention_key(pr.name) = t.key`.
+--   2. The ambiguity guard is DELETED. It read
+--      `(select count(*) from public.profiles amb
+--         where public.mention_key(amb.name) = t.key) = 1`
+--      and existed only because profiles.name is not unique. profiles.handle
+--      is, so the guard can no longer fire, and a guard that cannot fire is
+--      worse than no guard: the next reader has to work out whether it is
+--      load-bearing.
+--
+-- This is the change that makes the six previously-unmentionable accounts
+-- mentionable. Under 0010 a caption saying @emersonduong notified nobody,
+-- because the key matched two rows.
+--
+-- mention_key survives and is unchanged. It is still the right normaliser for
+-- the TOKEN -- it lowercases and strips a stray @ -- and its parity fixture in
+-- app/utils/mentions.test.ts still pins client and server together. What
+-- changed is only what the normalised token is compared against. That the
+-- comparison now works is a property of the CHECK on handle: a handle is
+-- already lowercase and already free of whitespace, so mention_key(token)
+-- and handle live in the same space.
+--
+-- Signatures are unchanged, so CREATE OR REPLACE preserves the grants from
+-- 0010. Restated at the end of the section regardless.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.notify_post_mentions()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+    if new.deleted_at is not null then
+        return null;
+    end if;
+
+    with raw as (
+        select public.mention_key(r.m[1]) as key, r.ord
+        from regexp_matches(new.text, '@([^\s#@]+)', 'g') with ordinality as r(m, ord)
+    ),
+    tokens as (
+        select key, min(ord) as first_ord
+        from raw
+        where key <> ''
+        group by key
+        order by min(ord)
+        limit 10
+    )
+    insert into public.notifications (user_id, actor_id, type, post_id, preview)
+    select pr.user_id, new.user_id, 'mention', new.id, left(new.text, 140)
+    from tokens t
+    join public.profiles pr on pr.handle = t.key
+    where pr.user_id <> new.user_id
+    on conflict (user_id, actor_id, type,
+                 coalesce(post_id, '00000000-0000-0000-0000-000000000000'::uuid))
+    do nothing;
+
+    return null;
+end;
+$$;
+
+create or replace function public.notify_comment_mentions()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_skip uuid;
+begin
+    if new.deleted_at is not null then
+        return null;
+    end if;
+
+    -- Identical to notify_comment_author's target resolution.
+    if new.parent_id is not null then
+        select c.user_id into v_skip
+          from public.comments c
+         where c.id = new.parent_id;
+    end if;
+
+    if v_skip is null or v_skip = new.user_id then
+        select p.user_id into v_skip
+          from public.posts p
+         where p.id = new.post_id;
+    end if;
+
+    with raw as (
+        select public.mention_key(r.m[1]) as key, r.ord
+        from regexp_matches(new.text, '@([^\s#@]+)', 'g') with ordinality as r(m, ord)
+    ),
+    tokens as (
+        select key, min(ord) as first_ord
+        from raw
+        where key <> ''
+        group by key
+        order by min(ord)
+        limit 10
+    )
+    insert into public.notifications (user_id, actor_id, type, post_id, comment_id, preview)
+    select pr.user_id, new.user_id, 'mention', new.post_id, new.id, left(new.text, 140)
+    from tokens t
+    join public.profiles pr on pr.handle = t.key
+    where pr.user_id <> new.user_id
+      and pr.user_id is distinct from v_skip
+    -- comment_id is not part of the dedup key, so a second mention of the same
+    -- person by the same actor on the same post keeps pointing at the first
+    -- comment. The post is the same either way.
+    on conflict (user_id, actor_id, type,
+                 coalesce(post_id, '00000000-0000-0000-0000-000000000000'::uuid))
+    do nothing;
+
+    return null;
+end;
+$$;
+
+revoke execute on function public.notify_post_mentions()    from public, anon, authenticated;
+revoke execute on function public.notify_comment_mentions() from public, anon, authenticated;
+
+-- Built by 0010 to serve the old name-based resolution, which no longer
+-- exists. mention_key itself stays -- it normalises tokens -- but nothing
+-- looks a profile up by it any more.
+drop index if exists public.profiles_mention_key_idx;
