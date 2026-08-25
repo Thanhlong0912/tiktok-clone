@@ -104,6 +104,14 @@ This app uses Supabase for Postgres, Auth and Storage. Before running it:
      arrives with its engagement counters already set, which is the same feed
      manipulation one statement earlier. It restates 0006's UPDATE grant as
      well, so it is correct on a database where 0006 never ran.
+   - `0009_profiles_insert_and_notifications_grant.sql` — **required.** The two
+     grants 0006 and 0008 left behind. Revokes INSERT on `profiles`, which was
+     the same counter hole one table over (a new account could hand itself any
+     `follower_count`), with no column grant to replace it because nothing in
+     the app inserts a profile — `handle_new_user` does. Then restores
+     `get_notifications` to authenticated-only: 0006 had to DROP and recreate
+     it to add the type filter, and a DROP takes the function's grants with it,
+     so the replacement was left callable by `anon`.
 2. **Upload the default avatar.** In Storage → `media`, upload an image named exactly `placeholder-avatar.png`. New profiles point at it until the user picks their own picture. The name must match `NEXT_PUBLIC_PLACEHOLDER_DEAFULT_IMAGE_ID` in `.env` and the default in `handle_new_user()` — extension included.
 3. **Disable email confirmation.** Auth → Providers → Email → turn off "Confirm email", so registering signs the user in straight away. If you leave it on, registration will ask the user to confirm their address first.
 4. **Fill in `.env`.** Copy `.env.example` to `.env` and set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from Project settings → API.
