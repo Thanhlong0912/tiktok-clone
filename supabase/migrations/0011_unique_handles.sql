@@ -197,3 +197,164 @@ $$;
 
 -- Only now, with every row filled, does the column become mandatory.
 alter table public.profiles alter column handle set not null;
+
+-- ---------------------------------------------------------------------------
+-- 5. Signup assigns a handle.
+--
+-- The Register form is deliberately unchanged. It already collects a display
+-- name and passes it through raw_user_meta_data, and adding a handle field
+-- would put an availability check inside a flow that cannot recover from
+-- failure -- a taken handle would have to fail the signup or silently pick
+-- something else, and both are worse than assigning one now and letting the
+-- account change it from Edit profile. That is TikTok's own behaviour.
+--
+-- CREATE OR REPLACE preserves the revoke from 0001; restated below anyway so
+-- this file is self-contained and the grant cannot drift out from under the
+-- replacement, which is the discipline 0007 established.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_name   text;
+    v_base   text;
+    v_handle text;
+    v_n      int := 1;
+begin
+    v_name := coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1));
+    v_base := public.handle_from_name(v_name);
+    v_handle := v_base;
+
+    while exists (select 1 from public.profiles p where p.handle = v_handle)
+       or exists (select 1 from public.handle_reservations h where h.handle = v_handle)
+    loop
+        v_n := v_n + 1;
+        v_handle := left(v_base, 24 - length(v_n::text)) || v_n::text;
+    end loop;
+
+    insert into public.profiles (user_id, name, image, bio, handle)
+    values (
+        new.id,
+        v_name,
+        -- Must match NEXT_PUBLIC_PLACEHOLDER_DEAFULT_IMAGE_ID in .env.
+        'placeholder-avatar.png',
+        '',
+        v_handle
+    )
+    on conflict (user_id) do nothing;
+
+    insert into public.handle_reservations (handle, user_id)
+    values (v_handle, new.id)
+    on conflict (handle) do nothing;
+
+    return new;
+end;
+$$;
+
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 6. Availability and rename.
+--
+-- handle_available is ADVISORY and nothing more. The unique index and the
+-- reservations primary key are the actual enforcement, because any
+-- check-then-act is a race: two people can both be told "available" and only
+-- one insert can win. The client uses this to colour a field, never to decide
+-- whether a write will succeed.
+--
+-- It is SECURITY DEFINER because handle_reservations is not readable through
+-- the API -- that is the whole point of section 2 -- so answering the question
+-- requires privilege the caller does not have. The function returns a boolean
+-- and never the row, so it cannot be used to enumerate who held what.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.handle_available(p_handle text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+    select p_handle ~ '^[a-z0-9._]{2,24}$'
+       and not exists (
+           select 1 from public.handle_reservations h
+            where h.handle = p_handle
+              and h.user_id <> (select auth.uid())
+       );
+$$;
+
+-- Validates, reserves, releases the previous reservation and updates the
+-- profile in one transaction.
+--
+-- Raising on a taken handle is the EXPECTED path when two people race, not an
+-- exceptional one, and the client is required to render it rather than treat
+-- it as a crash.
+--
+-- The actor comes from (select auth.uid()) and never from an argument, per the
+-- rule 0003 set for every writer in this schema. A p_user_id parameter on a
+-- SECURITY DEFINER writer is exactly how "rename somebody else" ships by
+-- accident.
+create or replace function public.set_handle(p_handle text)
+returns text
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_uid uuid := (select auth.uid());
+    v_old text;
+begin
+    if v_uid is null then
+        raise exception 'You must be signed in to change your handle'
+            using errcode = '28000';
+    end if;
+
+    if p_handle !~ '^[a-z0-9._]{2,24}$' then
+        raise exception 'Handles are 2-24 characters of lowercase letters, numbers, dots and underscores'
+            using errcode = '22023';
+    end if;
+
+    select handle into v_old from public.profiles where user_id = v_uid;
+
+    -- Setting your own handle to what it already is is a no-op, not an error.
+    -- Without this the reservation check below would find your own row and the
+    -- update would pointlessly release and re-take the same handle.
+    if v_old = p_handle then
+        return p_handle;
+    end if;
+
+    if exists (select 1 from public.handle_reservations h
+                where h.handle = p_handle and h.user_id <> v_uid) then
+        raise exception 'That handle is taken' using errcode = '23505';
+    end if;
+
+    -- Re-taking a handle you released before: clear released_at rather than
+    -- inserting a duplicate. The WHERE on the DO UPDATE is what stops this
+    -- from quietly stealing somebody else's reservation if the guard above
+    -- were ever weakened.
+    insert into public.handle_reservations (handle, user_id)
+    values (p_handle, v_uid)
+    on conflict (handle) do update set released_at = null
+      where public.handle_reservations.user_id = v_uid;
+
+    update public.profiles set handle = p_handle where user_id = v_uid;
+
+    -- The old handle stays reserved to this account forever. released_at
+    -- records when it stopped being current; it is NOT permission to reuse it,
+    -- and nothing in this schema ever deletes a reservation row.
+    update public.handle_reservations
+       set released_at = now()
+     where handle = v_old and user_id = v_uid;
+
+    return p_handle;
+end;
+$$;
+
+revoke execute on function public.handle_available(text) from public, anon;
+grant  execute on function public.handle_available(text) to authenticated;
+revoke execute on function public.set_handle(text)       from public, anon;
+grant  execute on function public.set_handle(text)       to authenticated;
