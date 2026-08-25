@@ -112,6 +112,16 @@ This app uses Supabase for Postgres, Auth and Storage. Before running it:
      `get_notifications` to authenticated-only: 0006 had to DROP and recreate
      it to add the type filter, and a DROP takes the function's grants with it,
      so the replacement was left callable by `anon`.
+   - `0010_mention_notifications.sql` — makes the `'mention'` notification type
+     real. It has been in the CHECK since 0002 and in the Activity renderer the
+     whole time, but nothing ever inserted one, so an @mention linkified to a
+     profile and notified nobody. Adds `public.mention_key` — which must stay
+     in step with `mentionKey()` in `app/utils/mentionKey.ts`, pinned by the
+     shared fixture in `app/utils/mentions.test.ts` — and a trigger on each of
+     `posts` and `comments`. Mentions whose key matches more than one account
+     notify nobody, because `profiles.name` is not unique. Not backfilled:
+     existing captions stay silent rather than firing hundreds of
+     notifications about old posts.
 2. **Upload the default avatar.** In Storage → `media`, upload an image named exactly `placeholder-avatar.png`. New profiles point at it until the user picks their own picture. The name must match `NEXT_PUBLIC_PLACEHOLDER_DEAFULT_IMAGE_ID` in `.env` and the default in `handle_new_user()` — extension included.
 3. **Disable email confirmation.** Auth → Providers → Email → turn off "Confirm email", so registering signs the user in straight away. If you leave it on, registration will ask the user to confirm their address first.
 4. **Fill in `.env`.** Copy `.env.example` to `.env` and set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from Project settings → API.

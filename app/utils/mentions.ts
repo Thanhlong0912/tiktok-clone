@@ -1,4 +1,5 @@
 import useSearchProfilesByName from '../hooks/useSearchProfilesByName'
+import { mentionKey } from './mentionKey'
 import { usePostStore } from '../stores/post'
 
 /**
@@ -16,14 +17,10 @@ import { usePostStore } from '../stores/post'
 const REGISTRY_KEY = 'tt_mention_registry'
 const resolutionCache = new Map<string, Promise<string | null>>()
 
-/** Canonical comparison key for a display name or mention. */
-export const mentionKey = (name: string) => name.replace(/[\s@]+/g, '').toLowerCase()
-
-/** Accent-insensitive key so "thanh" matches "Thành" while filtering. */
-export const foldName = (name: string) =>
-  mentionKey(name)
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+// mentionKey and foldName live in ./mentionKey so they can be imported
+// without pulling in the supabase client below. Re-exported here because
+// this is where callers have always found them.
+export { foldName, mentionKey } from './mentionKey'
 
 export function rememberMention(name: string, userId: string) {
   if (typeof window === 'undefined') return
