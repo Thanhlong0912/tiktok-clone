@@ -100,14 +100,32 @@ already written into a caption was written against `mention_key(name)`, so
 deriving handles the same way means **existing mentions keep resolving**.
 Choosing an unrelated derivation would silently orphan them.
 
-The stripping half is not optional, and it is the one place the two normalisers
+The folding half is not optional, and it is the one place the two normalisers
 must not be confused. `mention_key` preserves punctuation and accents on
 purpose — `@O'Brien` and `@OBrien` are two different people to a *token*
 resolver. But a handle is a stored value bound by `^[a-z0-9._]{2,24}$`, so
-`O'Brien` must become `obrien` and `Thành` must become `thanh` or the insert
-violates its own constraint. All 28 existing names are plain ASCII letters and
-spaces, so for the backfill the two steps coincide exactly and continuity is
-total; the stripping exists for names that arrive later.
+`O'Brien` must become `obrien` or the insert violates its own constraint.
+
+**Revised during implementation.** This section originally specified a plain
+strip of illegal characters, and called transliteration explicitly out of
+scope. Measuring it against real inputs showed that to be wrong for this app's
+users: a strip deletes accented letters outright, turning `Nguyễn Văn A` into
+`nguynvna` and `Thành` into `thnh`. The derivation is therefore NFD
+normalisation *then* strip, which decomposes an accented letter into its base
+plus combining marks and drops only the marks — giving `nguyenvana` and
+`thanh`.
+
+One character needs handling by name: `đ` (U+0111, d with stroke) has no
+canonical decomposition, because the stroke is part of the glyph rather than a
+combining mark. NFD leaves it and the strip then deletes it, so `Đặng Quân`
+becomes `angquan` — losing the first letter of the name. An explicit
+`replace(…, 'đ', 'd')` before normalising gives `dangquan`.
+
+All 28 existing names are plain ASCII letters and spaces, so every step after
+`mention_key` is a no-op for them. This was verified rather than assumed:
+zero live rows derive a different handle under folding than under
+`mention_key` alone, so continuity with mentions already written into captions
+is total.
 
 The three colliding pairs get a numeric suffix on the later row by
 `created_at`, so the account that had the name first keeps the bare handle:
