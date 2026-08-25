@@ -3,7 +3,6 @@ import useCreateBucketUrl from '@/app/hooks/useCreateBucketUrl'
 import useCreateLike from '@/app/hooks/useCreateLike'
 import useDeleteLike from '@/app/hooks/useDeleteLike'
 import useDeletePostById from '@/app/hooks/useDeletePostById'
-import { useCommentStore } from '@/app/stores/comment'
 import { useGeneralStore } from '@/app/stores/general'
 import { CommentsHeaderCompTypes } from '@/app/types'
 import { createInteraction, deleteInteraction } from '@/app/utils/socialInteractions'
@@ -23,7 +22,6 @@ import ClientOnly from '../ClientOnly'
 
 const CommentsHeader = ({ post, params, isMobileDetail = false }: CommentsHeaderCompTypes) => {
 
-    const { commentsByPost } = useCommentStore()
     const { setIsLoginOpen } = useGeneralStore()
 
     const contextUser = useUser()
@@ -247,7 +245,11 @@ const CommentsHeader = ({ post, params, isMobileDetail = false }: CommentsHeader
               <div className="cursor-pointer rounded-full bg-surface-subtle p-2">
                   <BsChatDots size={25} />
               </div>
-              <span className="pr-4 pl-2 text-xs font-semibold text-ink">{formatCount(commentsByPost?.length ?? 0)}</span>
+              {/* From the post row, not from the length of the loaded list:
+                  that list was capped at 100 and is now paginated, so its
+                  length stopped being the comment count. post.comment_count is
+                  trigger-maintained and already on the row get_post returned. */}
+              <span className="pr-4 pl-2 text-xs font-semibold text-ink">{formatCount(post?.comment_count ?? 0)}</span>
           </div>
 
           <ClientOnly>

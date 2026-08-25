@@ -275,6 +275,45 @@ export async function unblockUser(userId: string): Promise<void> {
   if (error) throw error
 }
 
+/**
+ * Mute is the softer half of the pair blocks belong to, and it had exactly the
+ * same problem: get_feed has filtered public.mutes since 0002, but nothing in
+ * the app ever wrote a row, so the filter could only ever run against an empty
+ * set.
+ *
+ * Scope matters for the copy at the call site. get_feed hides muted creators;
+ * get_following_feed does NOT, and neither do search, profiles or comments
+ * outside the thread reads added in 0007. So a mute means "stop recommending
+ * them", not "hide them" -- which is the distinction from blockUser above, and
+ * why they are separate actions rather than one with a strength dial.
+ */
+export async function muteUser(userId: string): Promise<void> {
+  const { data: auth } = await supabase.auth.getUser()
+  const muterId = auth.user?.id
+  if (!muterId) throw new Error('You must be logged in to mute someone')
+  if (muterId === userId) throw new Error('You cannot mute yourself')
+
+  const { error } = await supabase
+    .from('mutes')
+    .upsert({ muter_id: muterId, muted_id: userId }, { onConflict: 'muter_id,muted_id' })
+
+  if (error) throw error
+}
+
+export async function unmuteUser(userId: string): Promise<void> {
+  const { data: auth } = await supabase.auth.getUser()
+  const muterId = auth.user?.id
+  if (!muterId) return
+
+  const { error } = await supabase
+    .from('mutes')
+    .delete()
+    .eq('muter_id', muterId)
+    .eq('muted_id', userId)
+
+  if (error) throw error
+}
+
 export interface TrendingHashtag {
   tag: string
   post_count: number

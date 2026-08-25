@@ -9,7 +9,7 @@ import useGetFollowing from '@/app/hooks/useGetFollowing'
 import { RandomUsers } from '@/app/types'
 import { AiFillHome, AiOutlineHome } from 'react-icons/ai'
 import { BsPerson, BsPersonFill } from 'react-icons/bs'
-import { IoCompass, IoCompassOutline } from 'react-icons/io5'
+import { IoCompass, IoCompassOutline, IoSettings, IoSettingsOutline } from 'react-icons/io5'
 import { RiUserFollowFill, RiUserFollowLine } from 'react-icons/ri'
 import MenuItem from './MenuItem'
 import MenuItemFollow from './MenuItemFollow'
@@ -94,13 +94,24 @@ const SideNavMain = () => {
           onClick={goToFollowingFeed}
         />
         {contextUser?.user?.id ? (
-          <MenuItem
-            label="Profile"
-            href={`/profile/${contextUser.user.id}`}
-            icon={BsPerson}
-            iconActive={BsPersonFill}
-            active={pathname === `/profile/${contextUser.user.id}`}
-          />
+          <>
+            <MenuItem
+              label="Profile"
+              href={`/profile/${contextUser.user.id}`}
+              icon={BsPerson}
+              iconActive={BsPersonFill}
+              active={pathname === `/profile/${contextUser.user.id}`}
+            />
+            {/* The only route to the blocked and muted lists. Without it a
+                block was irreversible from anywhere in the app. */}
+            <MenuItem
+              label="Privacy"
+              href="/settings/privacy"
+              icon={IoSettingsOutline}
+              iconActive={IoSettings}
+              active={pathname.startsWith('/settings')}
+            />
+          </>
         ) : null}
 
         <div className="my-2 border-b border-line lg:mx-2" />

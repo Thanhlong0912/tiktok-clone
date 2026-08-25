@@ -18,6 +18,14 @@ Two rules hold for anything added to that file:
    predicates inside them are the only thing standing in for it.
 2. Writers derive the actor from `(select auth.uid())`, never from an argument.
 
+Comments follow the same shape as of `0007_comment_threads_and_social_lists.sql`.
+`get_post_comments` returns a page of top-level comments with their authors,
+their counters, their reply count and the viewer's own like state;
+`get_comment_replies` returns the identical columns for one thread, so a single
+component renders both levels. Threads are **two levels deep and never three** —
+a trigger rejects a reply to a reply, which is what keeps the cascade one level
+deep, gives `reply_count` exactly one owner, and keeps every read non-recursive.
+
 ## Supabase setup
 
 This app uses Supabase for Postgres, Auth and Storage. Before running it:
@@ -39,6 +47,18 @@ This app uses Supabase for Postgres, Auth and Storage. Before running it:
      media), restricts UPDATE to the columns users may actually edit (without
      it, anyone can write their own engagement counters, which feed ranking),
      and adds the notification type filter the Activity tabs use.
+   - `0007_comment_threads_and_social_lists.sql` — **required.** Comment
+     replies (one level, enforced by trigger) and comment likes, with their
+     counters, the same column-grant hardening 0006 applied to posts, and a
+     reply branch in the notification trigger so a reply reaches the person
+     replied to rather than the post author. Then the account lists PostgREST
+     cannot serve on its own, because `follows` / `blocks` / `mutes` all
+     reference `auth.users` rather than `profiles`: `get_followers`,
+     `get_following_accounts`, `get_blocked_accounts`, `get_muted_accounts`.
+
+     This one is not optional and not deferrable. The comment section calls
+     `get_post_comments` on every post; until the file is run, every thread in
+     the app renders its error state.
 2. **Upload the default avatar.** In Storage → `media`, upload an image named exactly `placeholder-avatar.png`. New profiles point at it until the user picks their own picture. The name must match `NEXT_PUBLIC_PLACEHOLDER_DEAFULT_IMAGE_ID` in `.env` and the default in `handle_new_user()` — extension included.
 3. **Disable email confirmation.** Auth → Providers → Email → turn off "Confirm email", so registering signs the user in straight away. If you leave it on, registration will ask the user to confirm their address first.
 4. **Fill in `.env`.** Copy `.env.example` to `.env` and set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from Project settings → API.

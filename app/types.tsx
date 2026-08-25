@@ -103,18 +103,11 @@ export interface PostWithProfile {
   }
 }
 
-export interface CommentWithProfile {
-  id: string;
-  user_id: string;
-  post_id: string;
-  text: string;
-  created_at: string;
-  profile: {
-      user_id: string;
-      name: string;
-      image: string;
-  }
-}
+/**
+ * A comment now lives in app/utils/commentThread.ts as `CommentNode`, which
+ * carries the fields 0007 added -- parent_id, like_count, reply_count and the
+ * viewer's own like state -- and is shaped by the RPCs that return it.
+ */
 
 export interface Comment {
   id: string;
@@ -156,11 +149,6 @@ export interface PostPageTypes {
 
 export interface ProfilePageTypes {
   params: { id: string; };
-}
-
-export interface SingleCommentCompTypes {
-  params: { userId: string; postId: string; };
-  comment: CommentWithProfile
 }
 
 export interface PostUserCompTypes {
