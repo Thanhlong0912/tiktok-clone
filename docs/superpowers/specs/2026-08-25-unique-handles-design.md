@@ -192,7 +192,16 @@ is only what the normalised token is compared against.
 This is the bulk of the work, and it splits cleanly by whether a change alters a
 function's signature.
 
-**Body-only — `CREATE OR REPLACE`, grants preserved (7):**
+> **Revised during implementation.** The seven body-only changes were dropped
+> from scope. `get_feed` and `get_user_posts` carry profile columns through
+> ranking CTEs (`page`, `source`), so `pr` is not in scope at their outer
+> select and threading the handle means editing the ranking logic itself — the
+> riskiest SQL in the schema, for a column the feed card can get another way.
+> Feed cards now resolve handles through one cached client-side lookup on
+> `profiles`, which is already publicly readable. The ten signature changes
+> below are unaffected and proceed as written.
+
+**Body-only — `CREATE OR REPLACE`, grants preserved (7), NOT DONE, see above:**
 `get_feed`, `get_following_feed`, `get_post`, `get_posts_by_hashtag`,
 `get_user_posts`, `search_videos` all return `SETOF feed_post`, so one
 `alter type public.feed_post add attribute profile_handle text` serves all six
