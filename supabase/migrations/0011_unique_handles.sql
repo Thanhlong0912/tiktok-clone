@@ -29,7 +29,7 @@ set lock_timeout = '5s';
 -- Mirrored by HANDLE_PATTERN in app/utils/handle.ts, pinned by the fixture in
 -- app/utils/handle.test.ts.
 --
--- NOT NULL is applied in section 3, after the backfill, so the constraint is
+-- NOT NULL is applied in section 4, after the backfill, so the constraint is
 -- not racing the rows it constrains. The CHECK can go on now: it passes on
 -- NULL, which is exactly the window the backfill needs.
 -- ---------------------------------------------------------------------------
@@ -142,3 +142,58 @@ as $$
                    '[^a-z0-9._]', '', 'g') as base
     ) d;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- 4. Backfill.
+--
+-- Ordered by created_at so the account that held a colliding name FIRST keeps
+-- the bare handle and later ones take a numeric suffix. Three names collide as
+-- of writing -- emersonduong, namduong, quandang, two rows each -- so exactly
+-- three rows get a '2'.
+--
+-- The suffix loop checks handle_reservations as well as profiles, so a handle
+-- released by an earlier rename is never handed to somebody else here either.
+-- Truncating the base before appending keeps base+suffix inside 24 characters,
+-- which matters for a name that already sits at the limit.
+--
+-- Guarded on `handle is null`, so a re-run neither renames anybody nor
+-- renumbers the suffixes. That guard is what makes this file idempotent: an
+-- unguarded backfill would reassign every handle on every run, and a handle
+-- that changes underneath its own reservation is exactly the impersonation
+-- case section 2 exists to prevent.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+    r      record;
+    v_base text;
+    v_try  text;
+    v_n    int;
+begin
+    for r in
+        select user_id, name from public.profiles
+         where handle is null
+         order by created_at, user_id
+    loop
+        v_base := public.handle_from_name(r.name);
+        v_try  := v_base;
+        v_n    := 1;
+
+        while exists (select 1 from public.profiles p where p.handle = v_try)
+           or exists (select 1 from public.handle_reservations h where h.handle = v_try)
+        loop
+            v_n   := v_n + 1;
+            v_try := left(v_base, 24 - length(v_n::text)) || v_n::text;
+        end loop;
+
+        update public.profiles set handle = v_try where user_id = r.user_id;
+
+        insert into public.handle_reservations (handle, user_id)
+        values (v_try, r.user_id)
+        on conflict (handle) do nothing;
+    end loop;
+end;
+$$;
+
+-- Only now, with every row filled, does the column become mandatory.
+alter table public.profiles alter column handle set not null;
