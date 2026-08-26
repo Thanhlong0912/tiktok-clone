@@ -10,7 +10,7 @@ import useGetRandomUsers from '../../hooks/useGetRandomUsers'
 import useSearchProfilesByName from '../../hooks/useSearchProfilesByName'
 import { usePostStore } from '../../stores/post'
 import { RandomUsers } from '../../types'
-import { foldName, rememberMention } from '../../utils/mentions'
+import { foldName } from '../../utils/mentions'
 import { getHandles } from '../../utils/handleLookup'
 import { supabase } from '@/libs/supabase'
 
@@ -187,9 +187,16 @@ const CaptionComposer = ({
       return true
     })
 
+    // Matched against both name and handle: a typed "@long" should surface
+    // an account whose display name is "Long Nguyen" (name match) just as
+    // readily as one whose handle is "long.dev" but whose name is something
+    // else entirely (handle match) -- the two are no longer the same field.
     const query = foldName(activeToken.query)
     const matches = query
-      ? pool.filter((user) => foldName(user.name || '').includes(query))
+      ? pool.filter(
+          (user) =>
+            foldName(user.name || '').includes(query) || foldName(user.handle || '').includes(query)
+        )
       : pool
 
     return matches.slice(0, 5)
@@ -333,8 +340,12 @@ const CaptionComposer = ({
                   type="button"
                   onMouseDown={(event) => {
                     event.preventDefault()
-                    rememberMention(profile.name, profile.id)
-                    completeToken(`@${profile.name.replace(/\s+/g, '')}`)
+                    // Written as @handle, not @name-with-spaces-stripped:
+                    // handle is the unique, indexed identity mentions resolve
+                    // against (see app/utils/mentions.ts), so a caption
+                    // stores the same string resolveMentionUserId looks up
+                    // rather than a lossy derivative of the display name.
+                    completeToken(`@${profile.handle}`)
                   }}
                   className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-surface-subtle"
                 >
