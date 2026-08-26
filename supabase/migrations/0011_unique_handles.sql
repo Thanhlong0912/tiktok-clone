@@ -29,9 +29,10 @@ set lock_timeout = '5s';
 -- Mirrored by HANDLE_PATTERN in app/utils/handle.ts, pinned by the fixture in
 -- app/utils/handle.test.ts.
 --
--- NOT NULL is applied in section 4, after the backfill, so the constraint is
--- not racing the rows it constrains. The CHECK can go on now: it passes on
--- NULL, which is exactly the window the backfill needs.
+-- NOT NULL is applied in section 6, after both the backfill and
+-- handle_new_user exist, so the constraint is not racing the rows it
+-- constrains. The CHECK can go on now: it passes on NULL, which is exactly
+-- the window the backfill needs.
 -- ---------------------------------------------------------------------------
 
 alter table public.profiles
@@ -64,7 +65,7 @@ create unique index if not exists profiles_handle_key on public.profiles (handle
 -- inheritance, and a unique index alone does not prevent it.
 --
 -- Not exposed through the API at all. Availability is answered by
--- handle_available in section 5, which is SECURITY DEFINER; reading the table
+-- handle_available in section 7, which is SECURITY DEFINER; reading the table
 -- directly would let anyone enumerate every handle every account has ever
 -- used, including ones they have since moved away from.
 -- ---------------------------------------------------------------------------
@@ -195,9 +196,6 @@ begin
 end;
 $$;
 
--- Only now, with every row filled, does the column become mandatory.
-alter table public.profiles alter column handle set not null;
-
 -- ---------------------------------------------------------------------------
 -- 5. Signup assigns a handle.
 --
@@ -211,6 +209,13 @@ alter table public.profiles alter column handle set not null;
 -- CREATE OR REPLACE preserves the revoke from 0001; restated below anyway so
 -- this file is self-contained and the grant cannot drift out from under the
 -- replacement, which is the discipline 0007 established.
+--
+-- Placed before section 6's NOT NULL constraint, not after: applied
+-- statement-at-a-time rather than in one transaction, that ordering is what
+-- keeps a signup landing in between from ever inserting a null handle. The
+-- old (pre-0011) handle_new_user does not know about this column at all, so
+-- if the constraint went on first, a signup in that window would insert with
+-- a null handle and be rejected outright.
 -- ---------------------------------------------------------------------------
 
 create or replace function public.handle_new_user()
@@ -258,7 +263,24 @@ $$;
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
--- 6. Availability and rename.
+-- 6. Handle becomes mandatory.
+--
+-- Deliberately last of the three handle-populating steps: the backfill
+-- (section 4) fills every existing row and handle_new_user (section 5) makes
+-- every new signup fill its own, so by the time this statement runs there is
+-- no path -- historical or new -- left that can produce a null handle for it
+-- to reject. Kept after handle_new_user rather than immediately after the
+-- backfill (where an earlier draft of this file had it) for exactly that
+-- reason: applied statement-at-a-time instead of in one transaction, the
+-- earlier position left a window where the old handle_new_user was still
+-- installed and this constraint already active, and a signup landing in that
+-- window would insert a null handle and fail.
+-- ---------------------------------------------------------------------------
+
+alter table public.profiles alter column handle set not null;
+
+-- ---------------------------------------------------------------------------
+-- 7. Availability and rename.
 --
 -- handle_available is ADVISORY and nothing more. The unique index and the
 -- reservations primary key are the actual enforcement, because any
@@ -360,7 +382,7 @@ revoke execute on function public.set_handle(text)       from public, anon;
 grant  execute on function public.set_handle(text)       to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 7. Mentions resolve by handle.
+-- 8. Mentions resolve by handle.
 --
 -- Both functions are 0010's verbatim, with exactly two changes each and no
 -- others:
@@ -491,7 +513,7 @@ revoke execute on function public.notify_comment_mentions() from public, anon, a
 drop index if exists public.profiles_mention_key_idx;
 
 -- ---------------------------------------------------------------------------
--- 8. The ten RETURNS TABLE functions gain a handle column.
+-- 9. The ten RETURNS TABLE functions gain a handle column.
 --
 -- Every other function touched by this migration could use CREATE OR REPLACE
 -- and keep its existing grants, because REPLACE is only disallowed when the
@@ -529,7 +551,7 @@ drop index if exists public.profiles_mention_key_idx;
 -- caller and rows they should not see, and this section does not touch them.
 -- ---------------------------------------------------------------------------
 
--- 8a. get_notifications. anon never reaches this function at all -- see its
+-- 9a. get_notifications. anon never reaches this function at all -- see its
 -- authenticated-only grant below -- but the body still checks v_uid is null
 -- and returns nothing, exactly as before.
 
@@ -578,7 +600,7 @@ $$;
 revoke execute on function public.get_notifications(jsonb, integer, text) from public, anon;
 grant  execute on function public.get_notifications(jsonb, integer, text) to authenticated;
 
--- 8b. get_post_comments.
+-- 9b. get_post_comments.
 
 drop function if exists public.get_post_comments(uuid, jsonb, integer);
 
@@ -625,7 +647,7 @@ $$;
 revoke execute on function public.get_post_comments(uuid, jsonb, integer) from public;
 grant  execute on function public.get_post_comments(uuid, jsonb, integer) to anon, authenticated;
 
--- 8c. get_comment_replies.
+-- 9c. get_comment_replies.
 
 drop function if exists public.get_comment_replies(uuid, jsonb, integer);
 
@@ -673,7 +695,7 @@ $$;
 revoke execute on function public.get_comment_replies(uuid, jsonb, integer) from public;
 grant  execute on function public.get_comment_replies(uuid, jsonb, integer) to anon, authenticated;
 
--- 8d. get_blocked_accounts and get_muted_accounts. Both LEFT JOIN profiles
+-- 9d. get_blocked_accounts and get_muted_accounts. Both LEFT JOIN profiles
 -- because the joined-to account can have been deleted while the block/mute
 -- record itself is kept, and both already coalesce name/image/bio for that
 -- row-may-not-exist case -- handle gets the same treatment for the same
@@ -727,7 +749,7 @@ $$;
 revoke execute on function public.get_muted_accounts(integer) from public, anon;
 grant  execute on function public.get_muted_accounts(integer) to authenticated;
 
--- 8e. get_followers and get_following_accounts.
+-- 9e. get_followers and get_following_accounts.
 
 drop function if exists public.get_followers(uuid, jsonb, integer);
 
@@ -789,7 +811,7 @@ $$;
 revoke execute on function public.get_following_accounts(uuid, jsonb, integer) from public;
 grant  execute on function public.get_following_accounts(uuid, jsonb, integer) to anon, authenticated;
 
--- 8f. get_profile.
+-- 9f. get_profile.
 
 drop function if exists public.get_profile(uuid);
 
@@ -816,7 +838,7 @@ $$;
 revoke execute on function public.get_profile(uuid) from public;
 grant  execute on function public.get_profile(uuid) to anon, authenticated;
 
--- 8g. get_trending_creators. The one function in this section that
+-- 9g. get_trending_creators. The one function in this section that
 -- aggregates, so pr.handle -- unlike every other added expression here --
 -- must also be added to the GROUP BY, or Postgres rejects the query with
 -- "column pr.handle must appear in the GROUP BY clause". order by 7 still
@@ -851,7 +873,7 @@ $$;
 revoke execute on function public.get_trending_creators(integer) from public;
 grant  execute on function public.get_trending_creators(integer) to anon, authenticated;
 
--- 8h. search_users. Unlike the other nine, this one also gains a second
+-- 9h. search_users. Unlike the other nine, this one also gains a second
 -- match path: today a search only tests p_query against the display name,
 -- which is exactly the field 0011 stops treating as an identity. Without this
 -- change, searching for the handle you know an account by -- as opposed to
