@@ -340,6 +340,14 @@ const CaptionComposer = ({
                   type="button"
                   onMouseDown={(event) => {
                     event.preventDefault()
+                    // profile.handle can still be '' here -- it is filled by
+                    // the same batched lookup as PostMain's authorHandle (see
+                    // app/utils/handleLookup.ts) and this list can render
+                    // before that resolves. Do nothing rather than insert a
+                    // bare "@": unlike a UI label, a caption is persisted, so
+                    // an unresolved handle written here would be a permanent
+                    // dangling mention instead of a one-frame flash.
+                    if (!profile.handle) return
                     // Written as @handle, not @name-with-spaces-stripped:
                     // handle is the unique, indexed identity mentions resolve
                     // against (see app/utils/mentions.ts), so a caption
