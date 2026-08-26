@@ -14,6 +14,7 @@ const account = (over: Partial<AccountSummary> & { user_id: string }): AccountSu
   is_following: false,
   is_self: false,
   followed_at: '2026-08-25T10:00:00.000Z',
+  handle: 'alice',
   ...over,
 })
 

@@ -32,6 +32,7 @@ export interface RandomUsers {
   id: string;
   name: string;
   image: string;
+  handle: string;
 }
 
 export interface CropperDimensions {

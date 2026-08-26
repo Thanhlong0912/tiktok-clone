@@ -10,7 +10,8 @@ import useGetRandomUsers from '../../hooks/useGetRandomUsers'
 import useSearchProfilesByName from '../../hooks/useSearchProfilesByName'
 import { usePostStore } from '../../stores/post'
 import { RandomUsers } from '../../types'
-import { foldName, rememberMention } from '../../utils/mentions'
+import { foldName } from '../../utils/mentions'
+import { getHandles } from '../../utils/handleLookup'
 import { supabase } from '@/libs/supabase'
 
 type ActiveToken = {
@@ -70,12 +71,23 @@ const CaptionComposer = ({
       const seen: Record<string, boolean> = {}
       const merged: RandomUsers[] = []
 
-      allPosts.forEach((post) => {
-        const profile = post.profile
-        if (profile?.user_id && !seen[profile.user_id]) {
-          seen[profile.user_id] = true
-          merged.push({ id: profile.user_id, name: profile.name, image: profile.image })
-        }
+      // allPosts is feed-shaped (get_feed and friends), which carries no
+      // handle -- see app/utils/handleLookup.ts. One batched lookup for every
+      // post author here, instead of a per-post fetch.
+      const feedAuthors = allPosts
+        .map((post) => post.profile)
+        .filter((profile) => Boolean(profile?.user_id))
+      const feedHandles = await getHandles(feedAuthors.map((profile) => profile.user_id))
+
+      feedAuthors.forEach((profile) => {
+        if (seen[profile.user_id]) return
+        seen[profile.user_id] = true
+        merged.push({
+          id: profile.user_id,
+          name: profile.name,
+          image: profile.image,
+          handle: feedHandles[profile.user_id] ?? '',
+        })
       })
 
       try {
@@ -175,9 +187,16 @@ const CaptionComposer = ({
       return true
     })
 
+    // Matched against both name and handle: a typed "@long" should surface
+    // an account whose display name is "Long Nguyen" (name match) just as
+    // readily as one whose handle is "long.dev" but whose name is something
+    // else entirely (handle match) -- the two are no longer the same field.
     const query = foldName(activeToken.query)
     const matches = query
-      ? pool.filter((user) => foldName(user.name || '').includes(query))
+      ? pool.filter(
+          (user) =>
+            foldName(user.name || '').includes(query) || foldName(user.handle || '').includes(query)
+        )
       : pool
 
     return matches.slice(0, 5)
@@ -321,8 +340,20 @@ const CaptionComposer = ({
                   type="button"
                   onMouseDown={(event) => {
                     event.preventDefault()
-                    rememberMention(profile.name, profile.id)
-                    completeToken(`@${profile.name.replace(/\s+/g, '')}`)
+                    // profile.handle can still be '' here -- it is filled by
+                    // the same batched lookup as PostMain's authorHandle (see
+                    // app/utils/handleLookup.ts) and this list can render
+                    // before that resolves. Do nothing rather than insert a
+                    // bare "@": unlike a UI label, a caption is persisted, so
+                    // an unresolved handle written here would be a permanent
+                    // dangling mention instead of a one-frame flash.
+                    if (!profile.handle) return
+                    // Written as @handle, not @name-with-spaces-stripped:
+                    // handle is the unique, indexed identity mentions resolve
+                    // against (see app/utils/mentions.ts), so a caption
+                    // stores the same string resolveMentionUserId looks up
+                    // rather than a lossy derivative of the display name.
+                    completeToken(`@${profile.handle}`)
                   }}
                   className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-surface-subtle"
                 >
@@ -331,7 +362,7 @@ const CaptionComposer = ({
                     className="h-8 w-8 rounded-full object-cover"
                     alt={profile.name}
                   />
-                  <span className="text-[14px] font-semibold text-ink">@{profile.name}</span>
+                  <span className="text-[14px] font-semibold text-ink">@{profile.handle}</span>
                 </button>
               ))}
         </div>

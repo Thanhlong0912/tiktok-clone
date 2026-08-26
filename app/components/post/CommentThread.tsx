@@ -479,7 +479,7 @@ const CommentThread = ({
         {replyTarget ? (
           <div className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-surface-subtle px-3 py-1.5">
             <span className="truncate text-[13px] text-ink-soft">
-              Replying to <span className="font-semibold text-ink">@{replyTarget.profile.name}</span>
+              Replying to <span className="font-semibold text-ink">@{replyTarget.profile.handle}</span>
             </span>
             <button
               onClick={() => setReplyTarget(null)}

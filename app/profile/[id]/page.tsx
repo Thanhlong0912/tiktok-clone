@@ -232,7 +232,7 @@ const Profile = ({ params }: ProfilePageTypes) => {
                         {currentProfile?.name ? (
                             <div>
                                 <p className="text-[30px] text-ink font-bold truncate">{currentProfile?.name}</p>
-                                <p className="text-[18px] text-ink-soft truncate">@{currentProfile?.name}</p>
+                                <p className="text-[18px] text-ink-soft truncate">@{currentProfile?.handle}</p>
                             </div>
                         ) : (
                             <div className="h-[60px]" />

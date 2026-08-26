@@ -146,7 +146,7 @@ const TopNav = () => {
                   className="flex items-center gap-2.5 px-3 py-2 hover:bg-surface-subtle"
                 >
                   <img className="h-9 w-9 rounded-full object-cover" src={useCreateBucketUrl(profile?.image)} alt={profile?.name} />
-                  <span className="truncate text-[15px] font-medium text-ink">@{profile?.name}</span>
+                  <span className="truncate text-[15px] font-medium text-ink">@{profile?.handle}</span>
                 </Link>
               ))}
               <button

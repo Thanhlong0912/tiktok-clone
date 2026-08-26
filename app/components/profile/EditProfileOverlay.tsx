@@ -15,6 +15,8 @@ import useUpdateProfileImage from '@/app/hooks/useUpdateProfileImage';
 import useCreateBucketUrl from '@/app/hooks/useCreateBucketUrl';
 import { fetchProfile } from '@/app/utils/feed';
 import { showToast } from '@/app/utils/toast';
+import { handleError } from '@/app/utils/handle';
+import { checkHandleAvailable, setHandle } from '@/app/utils/handleRpc';
 
 const EditProfileOverlay = () => {
     let { setIsEditProfileOpen } = useGeneralStore()
@@ -28,6 +30,13 @@ const EditProfileOverlay = () => {
     const [userImage, setUserImage] = useState<string | ''>('');
     const [userName, setUserName] = useState<string | ''>('');
     const [userBio, setUserBio] = useState<string | ''>('');
+    const [userHandle, setUserHandle] = useState<string | ''>('');
+    // What the handle was when the form loaded, so a Save that never touched
+    // this field can skip set_handle entirely -- see updateUserInfo below.
+    const [originalHandle, setOriginalHandle] = useState<string | ''>('');
+    const [handleAvailability, setHandleAvailability] = useState<
+        'idle' | 'checking' | 'available' | 'taken'
+    >('idle');
     const [isUpdating, setIsUpdating] = useState(false);
     const [isLoadingProfile, setIsLoadingProfile] = useState(true);
     const [error, setError] = useState<ShowErrorObject | null>(null)
@@ -52,6 +61,8 @@ const EditProfileOverlay = () => {
                 setUserName(profile.name || '')
                 setUserBio(profile.bio || '')
                 setUserImage(profile.image || '')
+                setUserHandle(profile.handle || '')
+                setOriginalHandle(profile.handle || '')
             })
             .catch((error) => {
                 console.error(error)
@@ -63,6 +74,47 @@ const EditProfileOverlay = () => {
 
         return () => { active = false }
     }, [userId])
+
+    /**
+     * Availability is checked live, on a debounce, so the field can tell the
+     * user "taken" before they ever hit Save -- but only after handleError
+     * passes locally. A malformed handle ("Al!ce") would otherwise fire a
+     * round trip per keystroke for a value that can never be valid, and
+     * handle_available would just echo back the same charset failure
+     * handleError already caught for free.
+     *
+     * An unchanged handle skips the check entirely: set_handle treats
+     * "already yours" as a no-op (see 0011's `if v_old = p_handle`), so
+     * asking handle_available here would either reservation-match the
+     * caller's own row (available) or, if the RPC's self-exclusion ever
+     * drifted, wrongly report their own handle as taken.
+     */
+    useEffect(() => {
+        if (!userHandle || userHandle === originalHandle || handleError(userHandle)) {
+            setHandleAvailability('idle')
+            return
+        }
+
+        let active = true
+        setHandleAvailability('checking')
+
+        const timer = setTimeout(async () => {
+            try {
+                const available = await checkHandleAvailable(userHandle)
+                if (active) setHandleAvailability(available ? 'available' : 'taken')
+            } catch (err) {
+                console.error(err)
+                // Advisory only -- a failed check should not block typing or
+                // pretend to know an answer it doesn't have.
+                if (active) setHandleAvailability('idle')
+            }
+        }, 300)
+
+        return () => {
+            active = false
+            clearTimeout(timer)
+        }
+    }, [userHandle, originalHandle])
 
     const getUploadedImage = (event: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFile = event.target.files && event.target.files[0];
@@ -81,9 +133,44 @@ const EditProfileOverlay = () => {
         if (isError) return
         if (!userId) return
 
+        const handleChanged = userHandle !== originalHandle
+
         try {
             setIsUpdating(true)
+
+            // Reversible write first, irreversible write last. Name and bio
+            // can be changed back freely; set_handle cannot be -- 0011 keeps
+            // the old handle reserved to this account forever, so it is a
+            // semi-permanent change the moment it succeeds. Running
+            // useUpdateProfile first means a failure there (the common case,
+            // since it's the one with no server-side validation beyond "not
+            // empty") can never leave a handle change stranded with the user
+            // told "failed" while it actually went through.
             await useUpdateProfile(userId, userName.trim(), userBio.trim())
+
+            if (handleChanged) {
+                try {
+                    await setHandle(userHandle)
+                    setOriginalHandle(userHandle)
+                } catch (handleErr: any) {
+                    // Name/bio are already committed at this point -- only
+                    // the handle failed. Say so distinctly rather than the
+                    // blanket "could not save your profile" below, and leave
+                    // the overlay open (skip the success path that follows)
+                    // so the field error is visible and the user can retry
+                    // or pick a different handle, instead of closing over a
+                    // save that was only half of what they asked for.
+                    console.error(handleErr)
+                    setError({
+                        type: 'handle',
+                        message: handleErr?.message || 'Could not save your username',
+                    })
+                    await contextUser?.checkUser()
+                    router.refresh()
+                    showToast('Name and bio saved, but your username could not be updated', 'error')
+                    return
+                }
+            }
 
             // Refreshes the name and avatar the top nav renders from context.
             await contextUser?.checkUser()
@@ -93,6 +180,9 @@ const EditProfileOverlay = () => {
         } catch (error) {
             // Was swallowed into console.log, and isUpdating was never reset --
             // a failed save left the button spinning with nothing to explain it.
+            // Only useUpdateProfile can throw into this catch (set_handle has
+            // its own try/catch above), so nothing has been written yet and a
+            // plain retry is safe.
             console.error(error)
             showToast('Could not save your profile', 'error')
         } finally {
@@ -144,11 +234,33 @@ const EditProfileOverlay = () => {
     const validate = () => {
         setError(null)
         let isError = false
+        // Only the first problem found is shown -- setError only ever holds
+        // one message, so if both fields are invalid the later check would
+        // otherwise silently clobber the earlier one.
+        let firstError: ShowErrorObject | null = null
 
         if (!userName) {
-            setError({ type: 'userName', message: 'A Username is required'})
+            firstError = firstError ?? { type: 'userName', message: 'A name is required' }
             isError = true
         }
+
+        // handleAvailability is advisory (see the debounce effect above), so
+        // Save re-runs handleError itself rather than trusting a "taken"/
+        // "available" that may be stale from a keystroke ago. Skipped
+        // entirely when the handle did not change, matching set_handle's own
+        // no-op-on-unchanged behaviour.
+        if (userHandle !== originalHandle) {
+            const handleMessage = handleError(userHandle)
+            if (handleMessage) {
+                firstError = firstError ?? { type: 'handle', message: handleMessage }
+                isError = true
+            } else if (handleAvailability === 'taken') {
+                firstError = firstError ?? { type: 'handle', message: 'That handle is taken' }
+                isError = true
+            }
+        }
+
+        if (firstError) setError(firstError)
         return isError
     }
 
@@ -225,15 +337,56 @@ const EditProfileOverlay = () => {
 
                                         <TextInput
                                             string={userName}
-                                            placeholder="Username"
+                                            placeholder="Name"
                                             onUpdate={setUserName}
                                             inputType="text"
                                             error={showError('userName')}
                                         />
 
                                         <p className={`relative text-[11px] text-ink-soft ${error ? 'mt-1' : 'mt-4'}`}>
-                                            Usernames can only contain letters, numbers, underscores, and periods.
-                                            Changing your username will also change your profile link.
+                                            This is the display name shown on your profile and posts.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div
+                                id="UserHandleSection"
+                                className="flex flex-col border-b border-line sm:h-[118px]  px-1.5 py-2 mt-1.5  w-full"
+                            >
+                                <h3 className="font-semibold text-[15px] sm:mb-0 mb-1 text-ink sm:w-[160px] sm:text-left text-center">
+                                    Username
+                                </h3>
+
+                                <div className="flex items-center justify-center sm:-mt-6">
+                                    <div className="sm:w-[60%] w-full max-w-md">
+
+                                        <TextInput
+                                            string={userHandle}
+                                            placeholder="username"
+                                            onUpdate={setUserHandle}
+                                            inputType="text"
+                                            error={showError('handle')}
+                                        />
+
+                                        {/* Live availability, not a substitute for set_handle's own
+                                            check on Save -- handle_available is advisory only (see
+                                            app/utils/handleRpc.ts), a stale "available" here can never
+                                            get past validate(). */}
+                                        <p
+                                            className={`relative text-[11px] ${
+                                                handleAvailability === 'taken'
+                                                    ? 'text-red-500'
+                                                    : handleAvailability === 'available'
+                                                    ? 'text-green-600'
+                                                    : 'text-ink-soft'
+                                            } ${error ? 'mt-1' : 'mt-4'}`}
+                                        >
+                                            {handleAvailability === 'checking' && 'Checking availability…'}
+                                            {handleAvailability === 'available' && 'This username is available.'}
+                                            {handleAvailability === 'taken' && 'That username is taken.'}
+                                            {handleAvailability === 'idle' &&
+                                                'Usernames can only contain letters, numbers, underscores, and periods. Changing your username will also change your profile link.'}
                                         </p>
                                     </div>
                                 </div>

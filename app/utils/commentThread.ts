@@ -31,6 +31,7 @@ export interface CommentNode {
     user_id: string
     name: string
     image: string
+    handle: string
   }
 }
 

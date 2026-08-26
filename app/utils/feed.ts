@@ -152,6 +152,7 @@ export interface ProfileSummary {
   is_following: boolean
   is_blocked: boolean
   is_self: boolean
+  handle: string
 }
 
 export async function fetchProfile(userId: string): Promise<ProfileSummary | null> {
@@ -350,6 +351,7 @@ export interface TrendingCreator {
   post_count: number
   recent_engagement: number
   is_following: boolean
+  handle: string
 }
 
 export async function fetchTrendingCreators(limit = 10): Promise<TrendingCreator[]> {
@@ -366,6 +368,7 @@ export interface SearchUserResult {
   follower_count: number
   is_following: boolean
   rank: number
+  handle: string
 }
 
 export interface SearchResults {

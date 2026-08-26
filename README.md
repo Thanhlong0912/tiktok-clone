@@ -8,9 +8,16 @@ moderation logic that a server would normally own lives in `SECURITY DEFINER`
 Postgres functions instead (`supabase/migrations/0003_feed_rpcs.sql`), called
 with `supabase.rpc()`.
 
-The feed is one call. `get_feed` returns a page of ranked posts together with
-their authors, their counters and the viewer's own like/save/repost/follow
-state, so a card renders without fetching anything of its own.
+The feed is one call, with one exception. `get_feed` returns a page of ranked
+posts together with their authors, their counters and the viewer's own
+like/save/repost/follow state, so a card renders without fetching anything of
+its own — except the author's `handle`. `get_feed` and `get_user_posts` build
+their rows through ranking CTEs that never bring `profiles` into scope for
+that column, and threading a handle through would mean editing ranking logic
+for a column those queries otherwise have no need of. So a post's author
+handle resolves through one extra batched, cached lookup instead
+(`app/utils/handleLookup.ts`), coalesced across every card mounted in the same
+render pass rather than fetched per card.
 
 Two rules hold for anything added to that file:
 
@@ -122,6 +129,25 @@ This app uses Supabase for Postgres, Auth and Storage. Before running it:
      notify nobody, because `profiles.name` is not unique. Not backfilled:
      existing captions stay silent rather than firing hundreds of
      notifications about old posts.
+   - `0011_unique_handles.sql` — **required.** Splits the identity `name` was
+     doing two jobs of into two fields. `name` stays the display name; a new
+     `profiles.handle` — unique, lowercase, `[a-z0-9._]{2,24}` — becomes the
+     identity. Backfills every existing account and adds `handle_reservations`,
+     a history of every handle an account has ever held. That table is not
+     optional bookkeeping: mentions are literal text baked into `posts.text`
+     and `comments.text`, so a released handle can never be reclaimed — handing
+     it to someone new would re-point every old mention at a different person.
+     Handles are assigned automatically at signup (`handle_new_user`) and
+     changed from Edit profile through `handle_available` / `set_handle`, the
+     advisory-check-plus-enforced-write pattern used everywhere in this schema.
+     Mentions now resolve by `handle` instead of `mention_key(name)`, which
+     removes 0010's ambiguity guard and makes the previously-unmentionable
+     accounts — the ones whose display names collided — mentionable. Without
+     this file, every RPC that returns a `handle` column fails outright.
+     `app/utils/handle.ts` mirrors the SQL CHECK's pattern and is pinned by the
+     fixture in `app/utils/handle.test.ts`, the same discipline `mentionKey()` /
+     `mention_key` and `normalizeTag` / `normalize_tag` already use elsewhere
+     in this codebase.
 2. **Upload the default avatar.** In Storage → `media`, upload an image named exactly `placeholder-avatar.png`. New profiles point at it until the user picks their own picture. The name must match `NEXT_PUBLIC_PLACEHOLDER_DEAFULT_IMAGE_ID` in `.env` and the default in `handle_new_user()` — extension included.
 3. **Disable email confirmation.** Auth → Providers → Email → turn off "Confirm email", so registering signs the user in straight away. If you leave it on, registration will ask the user to confirm their address first.
 4. **Fill in `.env`.** Copy `.env.example` to `.env` and set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from Project settings → API.

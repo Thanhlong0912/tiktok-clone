@@ -26,7 +26,7 @@ const MenuItemFollow = ({ user }: MenuItemFollowCompTypes) => {
                   </span>
               </div>
               <p className="truncate text-[12px] font-light text-ink-soft">
-                  @{user?.name}
+                  @{user?.handle}
               </p>
           </div>
       </Link>
