@@ -133,35 +133,44 @@ const EditProfileOverlay = () => {
         if (isError) return
         if (!userId) return
 
+        const handleChanged = userHandle !== originalHandle
+
         try {
             setIsUpdating(true)
 
-            // Skipped entirely when unchanged: set_handle itself treats
-            // "already yours" as a no-op, but making that round trip every
-            // time only Name or Bio changed would be pure waste -- and it
-            // would mean a signed-out/lost-the-race failure on a field the
-            // user never touched could block an otherwise-fine save.
-            if (userHandle !== originalHandle) {
+            // Reversible write first, irreversible write last. Name and bio
+            // can be changed back freely; set_handle cannot be -- 0011 keeps
+            // the old handle reserved to this account forever, so it is a
+            // semi-permanent change the moment it succeeds. Running
+            // useUpdateProfile first means a failure there (the common case,
+            // since it's the one with no server-side validation beyond "not
+            // empty") can never leave a handle change stranded with the user
+            // told "failed" while it actually went through.
+            await useUpdateProfile(userId, userName.trim(), userBio.trim())
+
+            if (handleChanged) {
                 try {
                     await setHandle(userHandle)
+                    setOriginalHandle(userHandle)
                 } catch (handleErr: any) {
-                    // set_handle RAISEs a specific, already user-facing
-                    // message per failure -- 23505 taken, 22023 malformed,
-                    // 28000 signed out -- and rendering it as-is is what's
-                    // required here. A raise is the EXPECTED outcome of two
-                    // people racing for the same handle, not a crash, so
-                    // this is a normal return, not a rethrow.
+                    // Name/bio are already committed at this point -- only
+                    // the handle failed. Say so distinctly rather than the
+                    // blanket "could not save your profile" below, and leave
+                    // the overlay open (skip the success path that follows)
+                    // so the field error is visible and the user can retry
+                    // or pick a different handle, instead of closing over a
+                    // save that was only half of what they asked for.
                     console.error(handleErr)
                     setError({
                         type: 'handle',
-                        message: handleErr?.message || 'Could not save your handle',
+                        message: handleErr?.message || 'Could not save your username',
                     })
+                    await contextUser?.checkUser()
+                    router.refresh()
+                    showToast('Name and bio saved, but your username could not be updated', 'error')
                     return
                 }
-                setOriginalHandle(userHandle)
             }
-
-            await useUpdateProfile(userId, userName.trim(), userBio.trim())
 
             // Refreshes the name and avatar the top nav renders from context.
             await contextUser?.checkUser()
@@ -171,6 +180,9 @@ const EditProfileOverlay = () => {
         } catch (error) {
             // Was swallowed into console.log, and isUpdating was never reset --
             // a failed save left the button spinning with nothing to explain it.
+            // Only useUpdateProfile can throw into this catch (set_handle has
+            // its own try/catch above), so nothing has been written yet and a
+            // plain retry is safe.
             console.error(error)
             showToast('Could not save your profile', 'error')
         } finally {
