@@ -45,7 +45,14 @@ async function fetchBatch(ids: string[]): Promise<void> {
     .select('user_id, handle')
     .in('user_id', ids)
 
-  if (error) return
+  // Logged, not swallowed: the caller's effect only depends on the ids it
+  // already had (see PostMain), so a dropped request here never retries --
+  // this is the one place a failure is visible at all, same discipline as
+  // useGetRandomUsers.
+  if (error) {
+    console.error(error)
+    return
+  }
 
   ;(data ?? []).forEach((row: { user_id: string; handle: string | null }) => {
     if (row.user_id && row.handle) cache.set(row.user_id, row.handle)

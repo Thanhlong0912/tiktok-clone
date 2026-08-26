@@ -946,7 +946,12 @@ const PostMain = ({
                   href={`/profile/${post.profile.user_id}`}
                   className="font-semibold md:text-[17px] md:font-bold md:hover:underline"
                 >
-                  @{authorHandle}
+                  {/* Nothing rather than a bare "@" while the lookup is in
+                      flight -- see the authorHandle state above. A lone "@"
+                      reads as broken UI; an empty label just looks like the
+                      card is still settling in, same as every other
+                      post-derived value here starts blank. */}
+                  {authorHandle && `@${authorHandle}`}
                 </Link>
                 {user?.id !== post.profile.user_id ? (
                   <button
