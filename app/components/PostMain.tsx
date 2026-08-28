@@ -34,6 +34,7 @@ import {
   subscribeToVideoCaptionsPreference,
 } from '../utils/videoCaptionsPreference'
 import useVideoPlayerPreferences from '../hooks/useVideoPlayerPreferences'
+import useSlideshowWatchSampler from '../hooks/useSlideshowWatchSampler'
 import CaptionText from './CaptionText'
 import ImageSlideshow from './ImageSlideshow'
 import VideoOptionsMenu, { type CaptionsState } from './VideoOptionsMenu'
@@ -213,6 +214,18 @@ const PostMain = ({
   )
 
   // ---------------------------------------------------------------- playback
+
+  /**
+   * A photo post has no <video>, so nothing here ever fed the watch session and
+   * every image post flushed as "nothing observed" -- no view, no affinity, and
+   * no post_views row, so get_feed could never permanently retire one.
+   */
+  useSlideshowWatchSampler({
+    postId: post.id,
+    isActive: postIsImage && isMediaActive,
+    slideCount: postImageIds.length,
+    speed,
+  })
 
   const handleVideoProgress = useCallback((event: React.SyntheticEvent<HTMLVideoElement>) => {
     const video = event.currentTarget
@@ -842,7 +855,13 @@ const PostMain = ({
                   volume={volume}
                   speed={speed}
                   autoPlay={isMediaActive}
-                  onCycleComplete={() => onVideoEnded(post.id)}
+                  onCycleComplete={() => {
+                    // Matches the <video> onEnded branch below: a finished pass
+                    // is a completion regardless of how sampling happened to
+                    // land.
+                    feedWatchSession.complete(post.id)
+                    onVideoEnded(post.id)
+                  }}
                   className="h-full w-full"
                   altPrefix={`${post.profile.name} image`}
                 />

@@ -229,3 +229,77 @@ describe('WatchSession', () => {
     expect(Number.isInteger(sent[0].watchMs)).toBe(true)
   })
 })
+
+/**
+ * A skip means "the feed showed you this and you moved past it". That is only
+ * true where the post was pushed at the viewer, and the distinction matters:
+ * skip_rate carries the single largest negative weight in feed_rank_score.
+ */
+describe('WatchSession skip classification', () => {
+  /** A brief watch: under skipBelowMs, and nowhere near 40% completion. */
+  const briefWatch = (session: WatchSession, advance: (ms: number) => void) => {
+    advance(300)
+    session.sample('a', { currentTime: 0.3, duration: 30 })
+    session.flush()
+  }
+
+  it('marks a brief watch as skipped by default, which is the feed', () => {
+    const { session, sent, advance } = harness()
+
+    session.start('a')
+    briefWatch(session, advance)
+
+    expect(sent[0].skipped).toBe(true)
+  })
+
+  it('never marks a skip when the viewer chose the post', () => {
+    // A permalink: the browser suspending an unmuted autoplay must not be
+    // reported as disinterest in a post somebody deliberately opened.
+    const { session, sent, advance } = harness()
+
+    session.start('a', { canSkip: false })
+    briefWatch(session, advance)
+
+    expect(sent[0].skipped).toBe(false)
+    // Still recorded -- the view and the watch time are real either way.
+    expect(sent[0].watchMs).toBe(300)
+  })
+
+  it('still reports a genuine long watch identically on both surfaces', () => {
+    const feed = harness()
+    const permalink = harness()
+
+    feed.session.start('a')
+    permalink.session.start('a', { canSkip: false })
+
+    ;[feed, permalink].forEach(({ session, advance }) => {
+      advance(1000)
+      session.sample('a', { currentTime: 9, duration: 10 })
+      advance(1000)
+      session.sample('a', { currentTime: 10, duration: 10 })
+      session.flush()
+    })
+
+    expect(feed.sent[0].skipped).toBe(false)
+    expect(permalink.sent[0].skipped).toBe(false)
+    expect(feed.sent[0].completion).toBe(permalink.sent[0].completion)
+  })
+
+  it('does not let the flag leak into the next post', () => {
+    // One session is shared app-wide, so a permalink handing back to the feed
+    // must not carry canSkip:false with it.
+    const { session, sent, advance } = harness()
+
+    session.start('permalink', { canSkip: false })
+    advance(300)
+    session.sample('permalink', { currentTime: 0.3, duration: 30 })
+
+    session.start('feed-card')
+    advance(300)
+    session.sample('feed-card', { currentTime: 0.3, duration: 30 })
+    session.flush()
+
+    expect(sent[0].skipped).toBe(false)
+    expect(sent[1].skipped).toBe(true)
+  })
+})
