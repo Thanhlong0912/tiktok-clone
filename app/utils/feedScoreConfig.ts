@@ -1,3 +1,5 @@
+import { countLabel } from './formatNumber'
+
 /**
  * The ranking weights, mirrored from public.feed_rank_score in
  * supabase/migrations/0003_feed_rpcs.sql.
@@ -65,8 +67,6 @@ export interface ScoreContribution {
   detail: string
 }
 
-const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`
-
 /**
  * Human-readable breakdown of why a post ranked where it did, for the
  * "Why this content?" panel in app/components/VideoOptionsMenu.tsx. Ordered by
@@ -130,9 +130,10 @@ export function explainRanking(input: {
     out.push({
       label: 'Popular with other viewers',
       weight: FEED_SCORE_WEIGHTS.like,
-      // Pluralised because this string is now read by users rather than only
-      // by tests -- "1 likes" on a post with a single like reads as a bug.
-      detail: `${plural(input.likeCount, 'like')}, ${plural(input.commentCount, 'comment')}.`,
+      // countLabel rather than a local helper: this string is read by users,
+      // and it should both pluralise ("1 like") and abbreviate ("1.2K likes")
+      // the same way every other count in the app does.
+      detail: `${countLabel(input.likeCount, 'like')}, ${countLabel(input.commentCount, 'comment')}.`,
     })
   }
 

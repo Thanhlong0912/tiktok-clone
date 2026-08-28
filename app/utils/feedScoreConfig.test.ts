@@ -125,4 +125,11 @@ describe('explainRanking', () => {
     expect(explainRanking({ ...base, likeCount: 0, commentCount: 1 })[0].detail)
       .toBe('0 likes, 1 comment.')
   })
+
+  it('abbreviates large counts the way every other count in the app does', () => {
+    // Shares formatNumber's countLabel with the link-preview cards, so the
+    // panel cannot drift into saying "1200 likes" while the rail says "1.2K".
+    expect(explainRanking({ ...base, likeCount: 1200, commentCount: 3_400_000 })[0].detail)
+      .toBe('1.2K likes, 3.4M comments.')
+  })
 })
