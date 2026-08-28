@@ -7,6 +7,7 @@ import { useGeneralStore } from '@/app/stores/general'
 import { CommentsHeaderCompTypes } from '@/app/types'
 import { createInteraction, deleteInteraction } from '@/app/utils/socialInteractions'
 import { formatCount } from '@/app/utils/formatNumber'
+import { getHandles } from '@/app/utils/handleLookup'
 import { supabase } from '@/libs/supabase'
 import { showToast } from '@/app/utils/toast'
 import moment from 'moment'
@@ -45,6 +46,23 @@ const CommentsHeader = ({ post, params, isMobileDetail = false }: CommentsHeader
     const [isRepostLoading, setIsRepostLoading] = useState<boolean>(false)
 
     const userId = contextUser?.user?.id
+
+    // get_post returns SETOF feed_post, which carries no handle -- see
+    // app/utils/handleLookup.ts. Empty until the batched lookup resolves.
+    const [authorHandle, setAuthorHandle] = useState<string>('')
+
+    useEffect(() => {
+        const authorId = post?.user_id
+        if (!authorId) return
+
+        let active = true
+
+        getHandles([authorId]).then((handles) => {
+            if (active) setAuthorHandle(handles[authorId] ?? '')
+        })
+
+        return () => { active = false }
+    }, [post?.user_id])
 
     useEffect(() => {
         setUserLiked(Boolean(post?.is_liked))
@@ -169,6 +187,10 @@ const CommentsHeader = ({ post, params, isMobileDetail = false }: CommentsHeader
         }
     }
 
+    const subtitleLabel = isMobileDetail
+        ? (authorHandle ? `@${authorHandle}` : '')
+        : post?.profile.name
+
   return (
     <>
       <div className="flex items-center justify-between px-4 text-ink lg:px-8">
@@ -189,9 +211,21 @@ const CommentsHeader = ({ post, params, isMobileDetail = false }: CommentsHeader
                     {post?.profile.name}
                 </Link>
 
+                {/*
+                  `@` means the handle, never the display name -- display names
+                  are not unique and can contain spaces, so "@Jane Doe" named
+                  nobody in particular. Blank rather than a bare "@" while the
+                  lookup is in flight, the same convention the feed card uses,
+                  and the separator goes with it so the line never opens on a
+                  stray dot. Desktop shows the display name and is unchanged.
+                */}
                 <div className="relative z-0 text-[12px] text-ink-soft lg:text-[13px]">
-                    {isMobileDetail ? `@${post?.profile.name}` : post?.profile.name}
-                    <span className="px-1">.</span>
+                    {subtitleLabel ? (
+                        <>
+                            {subtitleLabel}
+                            <span className="px-1">.</span>
+                        </>
+                    ) : null}
                     <span className="font-medium">{moment(post?.created_at).calendar()}</span>
                 </div>
             </div>

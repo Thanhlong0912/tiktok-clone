@@ -67,7 +67,23 @@ export interface ModeratedAccount {
   image: string
   bio: string
   created_at: string
+  handle: string
 }
+
+/**
+ * Both RPCs LEFT JOIN profiles, so an account whose row is gone comes back with
+ * the coalesced fallbacks rather than nulls -- but a null still reaches here if
+ * the database predates 0011, which added the handle column to both. Normalised
+ * for the same reason fetchFollowList normalises: a caller rendering `@` plus
+ * this value must never print "@null".
+ */
+const toModeratedAccount = (row: ModeratedAccount): ModeratedAccount => ({
+  ...row,
+  name: row.name ?? '',
+  image: row.image ?? '',
+  bio: row.bio ?? '',
+  handle: row.handle ?? '',
+})
 
 /**
  * Neither RPC takes a user argument: the subject is auth.uid() server-side and
@@ -76,11 +92,11 @@ export interface ModeratedAccount {
 export async function fetchBlockedAccounts(limit = 100): Promise<ModeratedAccount[]> {
   const { data, error } = await supabase.rpc('get_blocked_accounts', { p_limit: limit })
   if (error) throw error
-  return (data as ModeratedAccount[]) ?? []
+  return ((data as ModeratedAccount[]) ?? []).map(toModeratedAccount)
 }
 
 export async function fetchMutedAccounts(limit = 100): Promise<ModeratedAccount[]> {
   const { data, error } = await supabase.rpc('get_muted_accounts', { p_limit: limit })
   if (error) throw error
-  return (data as ModeratedAccount[]) ?? []
+  return ((data as ModeratedAccount[]) ?? []).map(toModeratedAccount)
 }
