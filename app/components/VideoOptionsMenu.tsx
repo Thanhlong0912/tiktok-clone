@@ -9,6 +9,7 @@ import {
   MdCheck,
   MdChevronRight,
   MdHd,
+  MdInsights,
   MdOutlineClosedCaption,
   MdOutlineSpeed,
   MdPersonOff,
@@ -28,6 +29,8 @@ import {
   subscribeToVideoSpeed,
   type PlaybackSpeed,
 } from '../utils/videoSpeedPreference'
+import { explainPost, type RankingPostFacts, type ScoreContribution } from '../utils/rankingExplain'
+import { fetchRankingSignals } from '../utils/rankingSignals'
 
 /** 'unknown' until the parent has looked the post's tracks up. */
 export type CaptionsState = 'unknown' | 'none' | 'available'
@@ -56,6 +59,12 @@ type VideoOptionsMenuProps = {
   onCaptionsChange?: (enabled: boolean) => void
   /** Lets the parent lazily load captions the first time the menu is opened. */
   onOpenChange?: (isOpen: boolean) => void
+  /**
+   * The four ranking inputs that ride along on the post row. Supplying them
+   * turns on "Why this content?"; omitting them hides it, which is right for
+   * any surface that is not a ranked feed.
+   */
+  rankingFacts?: RankingPostFacts
   className?: string
   buttonClassName?: string
   panelClassName?: string
@@ -80,13 +89,16 @@ const VideoOptionsMenu = ({
   isCaptionsEnabled = false,
   onCaptionsChange,
   onOpenChange,
+  rankingFacts,
   className = '',
   buttonClassName = '',
   panelClassName = '',
 }: VideoOptionsMenuProps) => {
   const menuRef = useRef<HTMLDivElement>(null)
   const [isOpen, setIsOpen] = useState<boolean>(false)
-  const [activePanel, setActivePanel] = useState<'main' | 'quality'>('main')
+  const [activePanel, setActivePanel] = useState<'main' | 'quality' | 'why'>('main')
+  const [isWhyLoading, setIsWhyLoading] = useState<boolean>(false)
+  const [whyReasons, setWhyReasons] = useState<ScoreContribution[] | null>(null)
   const [speed, setSpeed] = useState<PlaybackSpeed>(1)
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false)
   const [isReporting, setIsReporting] = useState<boolean>(false)
@@ -281,7 +293,33 @@ const VideoOptionsMenu = ({
     onToggleFloatingPlayer?.()
   }
 
+  /**
+   * Resolved on demand and never on a render path: three of the seven ranking
+   * inputs are table reads, and almost nobody opens this panel. Computed once
+   * per mount -- the reasons cannot change while the menu is open.
+   */
+  const openWhyPanel = async () => {
+    if (!rankingFacts || !postId || !postUserId) return
+
+    setActivePanel('why')
+    if (whyReasons) return
+
+    setIsWhyLoading(true)
+    try {
+      // Never rejects -- an empty result is a legitimate answer here.
+      const signals = await fetchRankingSignals(postId, postUserId)
+      setWhyReasons(explainPost(rankingFacts, signals))
+    } finally {
+      setIsWhyLoading(false)
+    }
+  }
+
   const hasPostActions = Boolean(postId && postUserId)
+  const showWhy = Boolean(rankingFacts && postId && postUserId)
+  // Bars are relative to the strongest reason in THIS list, not to an absolute
+  // scale: the panel answers "what mattered most here", and a post whose top
+  // reason is a modest one would otherwise render as a row of empty tracks.
+  const topWhyWeight = whyReasons?.length ? Math.abs(whyReasons[0].weight) : 0
   const showQuality = isVideoPost && Boolean(qualityLabel)
   const showFloatingPlayer = isVideoPost && isFloatingPlayerSupported && Boolean(onToggleFloatingPlayer)
   const showCaptions = isVideoPost && Boolean(onCaptionsChange)
@@ -312,7 +350,65 @@ const VideoOptionsMenu = ({
             role="menu"
             className={`absolute right-0 mt-2 w-[264px] rounded-xl border border-white/15 bg-[#2f2f34] p-2.5 text-white shadow-xl ${panelClassName}`}
           >
-            {activePanel === 'quality' ? (
+            {activePanel === 'why' ? (
+              <>
+                <button
+                  role="menuitem"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setActivePanel('main')
+                  }}
+                  className={rowClassName}
+                >
+                  <MdArrowBack size={17} />
+                  Why this content?
+                </button>
+
+                <div className="mt-1 border-t border-white/10 pt-2">
+                  {isWhyLoading ? (
+                    <p className="px-2 py-2 text-[13px] text-white/60">Checking…</p>
+                  ) : whyReasons && whyReasons.length > 0 ? (
+                    <>
+                      {whyReasons.map((reason) => (
+                        <div key={reason.label} className="px-2 pb-2.5">
+                          <p className="text-[14px] font-medium leading-5">{reason.label}</p>
+                          {/* The bar is comparative, so it only earns its place
+                              when there is a second reason to compare against --
+                              a lone full-width track says nothing. */}
+                          {whyReasons.length > 1 && topWhyWeight > 0 ? (
+                            <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-white/15">
+                              <div
+                                className="h-full rounded-full bg-[#5fd4ee]"
+                                style={{
+                                  width: `${Math.max(6, (Math.abs(reason.weight) / topWhyWeight) * 100)}%`,
+                                }}
+                              />
+                            </div>
+                          ) : null}
+                          <p className="mt-1 text-[12px] leading-4 text-white/55">{reason.detail}</p>
+                        </div>
+                      ))}
+                      <p className="border-t border-white/10 px-2 pt-2 text-[12px] leading-4 text-white/50">
+                        {whyReasons.length > 1 ? 'Strongest first. ' : ''}Use Not interested to see
+                        less like this.
+                      </p>
+                    </>
+                  ) : (
+                    /*
+                      A real answer, not a failure. A cold post shown to a
+                      viewer with no watch history genuinely ranked on nothing
+                      personal, and explainRanking returns an empty list for
+                      exactly that case -- so say so rather than inventing a
+                      reason or showing an error.
+                    */
+                    <p className="px-2 py-2 text-[13px] leading-5 text-white/60">
+                      Nothing personal yet — this one is here because it is recent and doing well
+                      with other viewers.
+                    </p>
+                  )}
+                </div>
+              </>
+            ) : activePanel === 'quality' ? (
               <>
                 <button
                   role="menuitem"
@@ -470,6 +566,25 @@ const VideoOptionsMenu = ({
                     )}
 
                     <div className="my-1 border-t border-white/10" />
+
+                    {/* Above Not interested deliberately: reading why this was
+                        recommended is what the next control acts on. */}
+                    {showWhy ? (
+                      <button
+                        role="menuitem"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void openWhyPanel()
+                        }}
+                        className={`${rowClassName} justify-between`}
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <MdInsights size={17} />
+                          Why this content?
+                        </span>
+                        <MdChevronRight size={17} className="text-white/70" />
+                      </button>
+                    ) : null}
 
                     <button
                       role="menuitem"
