@@ -2,11 +2,30 @@ This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next
 
 ## Architecture
 
-There is no server tier: every page is a client component and all data access
-goes through the browser supabase-js client. The ranking, aggregation and
-moderation logic that a server would normally own lives in `SECURITY DEFINER`
-Postgres functions instead (`supabase/migrations/0003_feed_rpcs.sql`), called
-with `supabase.rpc()`.
+There is no server tier: every interactive page is a client component and all
+data access goes through the browser supabase-js client. The ranking,
+aggregation and moderation logic that a server would normally own lives in
+`SECURITY DEFINER` Postgres functions instead
+(`supabase/migrations/0003_feed_rpcs.sql`), called with `supabase.rpc()`.
+
+**Interactive** is doing work in that sentence, because of one exception.
+`/post/[postId]/[userId]` and `/profile/[id]` each have a server component
+whose entire body is a `generateMetadata` call and a render of the client
+component that used to be the route (`PostDetail.tsx`, `ProfileView.tsx`).
+Nothing else moved to the server, and neither page is server-rendered in any
+meaningful sense — every byte the viewer sees still arrives in the browser.
+
+That shell exists because a client component cannot produce `<head>`, so a
+crawler fetching a post URL received markup with no post in it, and every link
+anyone pasted unfurled as the same generic app card. `app/utils/metadataFetch.ts`
+resolves one — plain `fetch()` to the same `get_post` / `get_profile` RPCs the
+browser calls, executed as `anon`, which 0003 and 0011 already grant. No server
+client, no session, no service-role key, and the definer functions' own
+`deleted_at is null` and block predicates still apply, so it can only ever see
+what a logged-out visitor could. It never throws: a failed lookup falls back to
+the generic card rather than taking the page down.
+
+These are the only two routes that are not statically generated.
 
 The feed is one call, with one exception. `get_feed` returns a page of ranked
 posts together with their authors, their counters and the viewer's own
