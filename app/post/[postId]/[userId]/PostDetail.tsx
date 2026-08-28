@@ -8,6 +8,8 @@ import VideoOptionsMenu, { type CaptionsState } from '@/app/components/VideoOpti
 import VolumeControl from '@/app/components/VolumeControl'
 import useCreateBucketUrl from '@/app/hooks/useCreateBucketUrl'
 import useVideoPlayerPreferences from '@/app/hooks/useVideoPlayerPreferences'
+import useSlideshowWatchSampler from '@/app/hooks/useSlideshowWatchSampler'
+import { feedWatchSession } from '@/app/utils/feedWatch'
 import { createCaptionObjectUrl, fetchPostCaptions } from '@/app/utils/captions'
 import { resolutionLabel } from '@/app/utils/videoQuality'
 import {
@@ -113,6 +115,42 @@ const Post = ({ params }: PostPageTypes) => {
   const postAudioId = getImagePostAudioId(postById?.video_url)
   const hasImageAudio = postIsImage && Boolean(postAudioId)
 
+  /**
+   * Watch measurement, which this page had none of.
+   *
+   * Only the feed card was ever instrumented, so a permalink -- the thing every
+   * shared link opens -- earned its creator no view, no completion and no
+   * affinity however long it was watched for. One session is shared app-wide
+   * and start() flushes whatever came before, so arriving here from the feed
+   * hands the measurement over cleanly rather than double-counting.
+   */
+  useEffect(() => {
+    if (!params.postId) return
+
+    // canSkip: false -- the viewer navigated here on purpose, so a short watch
+    // is not a skip. Without this, opening a shared link and leaving before the
+    // browser sustained playback applied the ranking skip penalty to the very
+    // post that link was promoting.
+    feedWatchSession.start(params.postId, { canSkip: false })
+
+    return () => {
+      if (feedWatchSession.activePostId() === params.postId) {
+        feedWatchSession.flush()
+      }
+    }
+  }, [params.postId])
+
+  const sampleDetailWatch = useCallback(
+    (event: React.SyntheticEvent<HTMLVideoElement>) => {
+      const video = event.currentTarget
+      feedWatchSession.sample(params.postId, {
+        currentTime: video.currentTime,
+        duration: video.duration,
+      })
+    },
+    [params.postId]
+  )
+
   const pauseCurrentVideos = useCallback((lockDuringNavigation = false) => {
     if (lockDuringNavigation) {
       pauseVideosDuringNavigation()
@@ -127,6 +165,15 @@ const Post = ({ params }: PostPageTypes) => {
   const mobilePlayer = useVideoPlayerPreferences(mobileVideoRef)
   const desktopPlayer = useVideoPlayerPreferences(desktopVideoRef)
   const { isSoundEnabled, volume, speed } = isDesktopViewport ? desktopPlayer : mobilePlayer
+
+  // Declared here rather than beside the other watch effects above: it reads
+  // `speed`, which the players resolve on the line above this one.
+  useSlideshowWatchSampler({
+    postId: params.postId,
+    isActive: postIsImage && Boolean(postById?.video_url),
+    slideCount: postImageIds.length,
+    speed,
+  })
 
   const getActiveVideo = useCallback(() => {
     if (isDesktopViewport === null) {
@@ -209,6 +256,12 @@ const Post = ({ params }: PostPageTypes) => {
   }
 
   const handleVideoEnded = () => {
+    // Before the auto-scroll guard, and deliberately: reaching the end is a
+    // completion whether or not the viewer has auto-advance switched on. This
+    // is the one place all four players (video and slideshow, mobile and
+    // desktop) already converge, so recording it here cannot drift.
+    feedWatchSession.complete(currentPostIdRef.current)
+
     if (!isAutoScrollEnabledRef.current) {
       return
     }
@@ -479,6 +532,7 @@ const Post = ({ params }: PostPageTypes) => {
                     loop={!isAutoScrollEnabled}
                     muted={!isSoundEnabled}
                     onEnded={handleVideoEnded}
+                    onTimeUpdate={sampleDetailWatch}
                     onLoadedMetadata={() => initializeDetailVideo(mobileVideoRef.current)}
                     onPlay={() => pauseOtherVideos(mobileVideoRef.current)}
                     className="h-full w-full object-contain"
@@ -711,6 +765,7 @@ const Post = ({ params }: PostPageTypes) => {
                           loop={!isAutoScrollEnabled}
                           muted={!isSoundEnabled}
                           onEnded={handleVideoEnded}
+                          onTimeUpdate={sampleDetailWatch}
                           onLoadedMetadata={() => initializeDetailVideo(desktopVideoRef.current)}
                           onPlay={() => pauseOtherVideos(desktopVideoRef.current)}
                           className={desktopVideoClassName}

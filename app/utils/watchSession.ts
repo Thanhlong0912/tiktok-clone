@@ -47,6 +47,8 @@ interface ActiveWatch {
   maxCompletion: number
   loops: number
   lastTime: number
+  /** Whether a short watch on this surface means "skipped". See start(). */
+  canSkip: boolean
 }
 
 const DEFAULT_SKIP_BELOW_MS = 2000
@@ -64,8 +66,18 @@ export class WatchSession {
     }
   }
 
-  /** Called when a post becomes the active one. Flushes any previous post. */
-  start(postId: string): void {
+  /**
+   * Called when a post becomes the active one. Flushes any previous post.
+   *
+   * `canSkip` says whether a short watch means anything here. In the feed it
+   * does: the viewer was shown this post and moved past it, which is the whole
+   * basis of the skip signal. On a surface the viewer navigated to on purpose
+   * -- a permalink, a shared link -- it does not. There, a short watch is at
+   * least as likely to be the browser suspending an unmuted autoplay as it is
+   * disinterest, and reporting it would apply the ranking skip penalty to a
+   * post somebody deliberately opened.
+   */
+  start(postId: string, options: { canSkip?: boolean } = {}): void {
     if (this.active && this.active.postId === postId) return
 
     this.flush()
@@ -76,6 +88,7 @@ export class WatchSession {
       maxCompletion: 0,
       loops: 0,
       lastTime: 0,
+      canSkip: options.canSkip ?? true,
     }
   }
 
@@ -135,7 +148,10 @@ export class WatchSession {
       watchMs: Math.round(active.watchMs),
       completion: active.maxCompletion,
       loops: active.loops,
-      skipped: active.watchMs < this.options.skipBelowMs && active.maxCompletion < 0.4,
+      skipped:
+        active.canSkip &&
+        active.watchMs < this.options.skipBelowMs &&
+        active.maxCompletion < 0.4,
     })
   }
 
