@@ -142,9 +142,15 @@ const Profile = ({ params }: ProfilePageTypes) => {
 
     const shareProfile = useCallback(async () => {
         const url = `${window.location.origin}/profile/${params.id}`
+        // `@` is the handle, not the display name. get_profile returns both, and
+        // only the handle is unique -- two accounts can share a display name, so
+        // "@Jane Doe" names nobody in particular.
+        const title = currentProfile?.handle
+            ? `@${currentProfile.handle} on TikTok Clone`
+            : 'A profile on TikTok Clone'
         if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
             try {
-                await navigator.share({ title: `@${currentProfile?.name || 'profile'} on TikTok Clone`, url })
+                await navigator.share({ title, url })
                 return
             } catch {
                 // Fall through to clipboard when the native sheet is dismissed/unavailable.
@@ -156,7 +162,7 @@ const Profile = ({ params }: ProfilePageTypes) => {
         } catch {
             showToast('Could not copy link', 'error')
         }
-    }, [currentProfile?.name, params.id])
+    }, [currentProfile?.handle, params.id])
 
     const [isFollowLoading, setIsFollowLoading] = useState<boolean>(false)
 

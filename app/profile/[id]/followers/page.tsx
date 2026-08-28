@@ -51,7 +51,9 @@ const FollowersPage = ({ params }: { params: { id: string } }) => {
   const { setIsLoginOpen } = useGeneralStore()
 
   const [tab, setTab] = useState<FollowListKind>('followers')
-  const [profileName, setProfileName] = useState<string>('')
+  // The handle, not the name: this is rendered behind an `@`, and only the
+  // handle is unique. get_profile returns both on the one row already fetched.
+  const [profileHandle, setProfileHandle] = useState<string>('')
   const [counts, setCounts] = useState<{ followers: number; following: number } | null>(null)
 
   const [items, setItems] = useState<AccountSummary[]>([])
@@ -70,7 +72,7 @@ const FollowersPage = ({ params }: { params: { id: string } }) => {
     fetchProfile(params.id)
       .then((profile) => {
         if (!active || !profile) return
-        setProfileName(profile.name)
+        setProfileHandle(profile.handle)
         setCounts({ followers: profile.follower_count, following: profile.following_count })
       })
       .catch((error) => console.error(error))
@@ -201,7 +203,7 @@ const FollowersPage = ({ params }: { params: { id: string } }) => {
             <IoArrowBack size={22} />
           </button>
           <h1 className="truncate text-[20px] font-bold text-ink">
-            {profileName ? `@${profileName}` : 'Account'}
+            {profileHandle ? `@${profileHandle}` : 'Account'}
           </h1>
         </div>
 

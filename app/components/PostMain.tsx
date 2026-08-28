@@ -708,7 +708,13 @@ const PostMain = ({
   const sharePostNative = useCallback(async () => {
     try {
       await navigator.share({
-        title: `@${post.profile.name} on TikTok Clone`,
+        // The handle, not the display name -- see the authorHandle state above.
+        // It can still be empty if the batched lookup has not resolved, and a
+        // bare "@" reads as broken here exactly as it does on the card, so the
+        // display name carries the title until it lands.
+        title: authorHandle
+          ? `@${authorHandle} on TikTok Clone`
+          : `${post.profile.name} on TikTok Clone`,
         text: post.text,
         url: postUrl(),
       })
@@ -718,7 +724,7 @@ const PostMain = ({
       // Dismissed the native sheet -- not an error.
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [post.id, post.profile.name, post.profile.user_id, post.text])
+  }, [authorHandle, post.id, post.profile.name, post.profile.user_id, post.text])
 
   // --------------------------------------------------------------- comments
 

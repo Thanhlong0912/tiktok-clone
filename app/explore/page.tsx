@@ -14,6 +14,7 @@ import ImageSlideshow from '../components/ImageSlideshow'
 import MobileBottomNav from '../components/MobileBottomNav'
 import MainLayout from '../layouts/MainLayout'
 import useCreateBucketUrl, { createBucketUrl } from '../hooks/useCreateBucketUrl'
+import { getHandles } from '../utils/handleLookup'
 import { getImagePostAudioId, getImagePostIds, isImagePost } from '../utils/postMedia'
 import { normalizeTag } from '../utils/postTags'
 import { pauseOtherVideos } from '../utils/videoPlayback'
@@ -548,6 +549,26 @@ const ExploreThumb = ({
   const likeCount = post.like_count
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const [isHovering, setIsHovering] = useState(false)
+  const [authorHandle, setAuthorHandle] = useState('')
+
+  /**
+   * Only for the captionless fallback below. A caption is required at upload,
+   * so this is the rare row (seeded or pre-dating that rule) -- looking every
+   * tile's author up regardless would cost a query per grid for a label almost
+   * no tile renders. getHandles coalesces whatever does need it into one.
+   */
+  const needsHandle = !post.text
+  useEffect(() => {
+    if (!needsHandle) return
+
+    let active = true
+
+    getHandles([post.profile.user_id]).then((handles) => {
+      if (active) setAuthorHandle(handles[post.profile.user_id] ?? '')
+    })
+
+    return () => { active = false }
+  }, [needsHandle, post.profile.user_id])
 
   const postIsImage = isImagePost(post.video_url)
   const postImageIds = getImagePostIds(post.video_url)
@@ -631,7 +652,9 @@ const ExploreThumb = ({
         ) : null}
       </div>
       <p className="truncate px-1.5 py-1.5 text-left text-[13px] text-ink">
-        <CaptionText text={post.text || `@${post.profile.name}`} linkify={false} />
+        {/* `@` is the handle. Nothing rather than a bare "@" while the lookup
+            is in flight -- the tile still has its thumbnail to show. */}
+        <CaptionText text={post.text || (authorHandle && `@${authorHandle}`)} linkify={false} />
       </p>
     </button>
   )

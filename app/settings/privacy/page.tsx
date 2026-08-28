@@ -118,13 +118,18 @@ const PrivacySettingsPage = () => {
       setPendingId(account.user_id)
       setList((current) => current.filter((item) => item.user_id !== account.user_id))
 
+      // `@` means the handle, never the display name -- those are not unique and
+      // may contain spaces. Both RPCs LEFT JOIN profiles, so a deleted account
+      // has no handle to show; fall back to the name the RPC coalesced in.
+      const label = account.handle ? `@${account.handle}` : account.name
+
       try {
         if (kind === 'blocked') {
           await unblockUser(account.user_id)
-          showToast(`Unblocked @${account.name}`)
+          showToast(`Unblocked ${label}`)
         } else {
           await unmuteUser(account.user_id)
-          showToast(`Unmuted @${account.name}`)
+          showToast(`Unmuted ${label}`)
         }
       } catch (error) {
         console.error(error)
