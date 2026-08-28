@@ -931,6 +931,15 @@ const PostMain = ({
               onOpenChange={(menuIsOpen) => {
                 if (menuIsOpen) void loadCaptions()
               }}
+              // The four ranking inputs get_feed already put on this row. The
+              // live counters rather than post.* -- the panel should explain
+              // the numbers the viewer can see on the rail beside it.
+              rankingFacts={{
+                createdAt: post.created_at,
+                likeCount: likesCount,
+                commentCount: commentsCount,
+                isFollowing: Boolean(followId),
+              }}
               className="absolute right-4 top-[calc(env(safe-area-inset-top)+16px)] md:right-3 md:top-3"
             />
 

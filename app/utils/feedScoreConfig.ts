@@ -65,9 +65,15 @@ export interface ScoreContribution {
   detail: string
 }
 
+const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`
+
 /**
  * Human-readable breakdown of why a post ranked where it did, for the
- * "Why this content?" control. Ordered by absolute contribution.
+ * "Why this content?" panel in app/components/VideoOptionsMenu.tsx. Ordered by
+ * absolute contribution.
+ *
+ * Assembled from a post row plus app/utils/rankingSignals.ts by explainPost()
+ * in app/utils/rankingExplain.ts, which is what callers should reach for.
  */
 export function explainRanking(input: {
   isFollowing: boolean
@@ -124,7 +130,9 @@ export function explainRanking(input: {
     out.push({
       label: 'Popular with other viewers',
       weight: FEED_SCORE_WEIGHTS.like,
-      detail: `${input.likeCount} likes, ${input.commentCount} comments.`,
+      // Pluralised because this string is now read by users rather than only
+      // by tests -- "1 likes" on a post with a single like reads as a bug.
+      detail: `${plural(input.likeCount, 'like')}, ${plural(input.commentCount, 'comment')}.`,
     })
   }
 

@@ -116,4 +116,13 @@ describe('explainRanking', () => {
     const reasons = explainRanking({ ...base, likeCount: 12, commentCount: 3 })
     expect(reasons[0].detail).toBe('12 likes, 3 comments.')
   })
+
+  it('pluralises the counts it prints', () => {
+    // This string is read by users in the "Why this content?" panel, where
+    // "1 likes" reads as a bug.
+    expect(explainRanking({ ...base, likeCount: 1, commentCount: 0 })[0].detail)
+      .toBe('1 like, 0 comments.')
+    expect(explainRanking({ ...base, likeCount: 0, commentCount: 1 })[0].detail)
+      .toBe('0 likes, 1 comment.')
+  })
 })
